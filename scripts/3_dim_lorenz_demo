@@ -95,7 +95,7 @@ y_coord = ys[:, 1]
 
 fig = plt.figure(figsize=(14, 5))
 
-ax1 = fig.add_subplot(121, projection="2d")
+ax1 = fig.add_subplot(121) #, projection='3d')
 ax1.plot(x_coord, y_coord, lw = 0.5) #z_coord, lw=0.5)
 ax1.set_title("Stochastic Lorenz Attractor")
 ax1.set_xlabel("x"); ax1.set_ylabel("y") # ; ax1.set_zlabel("z")
