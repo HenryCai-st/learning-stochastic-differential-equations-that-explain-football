@@ -3,11 +3,7 @@
 ## Branch description
 
 This branch uses [lorenz system](https://en.wikipedia.org/wiki/Lorenz_system) for simulating the SDE. A template script can be found in subfolder `scripts` to generate and plot.
-Planned steps:
-
-1. **Production-ready script**
-
-We need a script ready to set different 6 parameters (sigma, rho, beta, 3 noise coefficients) and generate given amount of SDEs of each set, then output to given folder, which each set is in a subfolder, where it stores both trajectories as numpy arrays and images for each one instance of SDE along with the parameters generating them stored as txt or json.
+Planned steps described in `documentation.md`. `lorenz_sde_design__notes.md` gives thoughts about it.
 
 ## Project description
 
@@ -69,3 +65,17 @@ Model the whole piepline of project. e.g.:
    ```bash
    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
    ```
+
+## SDE Generation Instructions
+
+1. **Running batch generation**
+   ```
+   python scripts/run_lorenz.py
+   ```
+
+   3 modes to choose via `--mode`:
+   - grid: runs over all permutations of parameter sets
+   - sensitivity: given base params, only change one parameter at a time
+   - both
+
+   The parameters are configured inside run_lorenz.py
