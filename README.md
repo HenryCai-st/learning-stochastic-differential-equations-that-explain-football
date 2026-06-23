@@ -18,6 +18,7 @@ Know how we generate trajectories based on parameters. This is assumed to be pro
 2. **Modelling**
 
 Model the whole piepline of project. e.g.:
+
 - Design parameters for predicting the trajectories
 - Decide shape of dataset, 2d with trajectory length, type image or sequence of coordinates
 - Decide architecture used for prediction
@@ -25,7 +26,7 @@ Model the whole piepline of project. e.g.:
 
 3. **Prototype**
 
-- Start with simple CNN, we can set up binary classifier first to let it separate one distribution of traectories to another
+- Start with simple CNN, we can set up binary classifier first to let it separate one distribution of trajectories to another
 - Note: Need to find parameters with maximal difference in distribution regarding parameter sensitivity analysis
 - Then if result looks good, use transfer learning to finetune to do regression on parameters
 
@@ -45,23 +46,27 @@ Model the whole piepline of project. e.g.:
 
 1. **Create and Activate a Virtual Environment:**
    Using `venv`:
+
    ```bash
    python -m venv venv
    ```
+
    * Windows: `venv\Scripts\activate`
    * Mac/Linux: `source venv/bin/activate`
-
 2. **Install Dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
-
 3. **Install PyTorch with CUDA 12.8:**
    If you have the CPU version installed, uninstall it first:
+
    ```bash
    pip uninstall torch torchvision
    ```
+
    Then install the CUDA-enabled version:
+
    ```bash
    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
    ```
@@ -69,11 +74,12 @@ Model the whole piepline of project. e.g.:
 ## SDE Generation Instructions
 
 1. **Running batch generation**
+
    ```
    python scripts/run_lorenz.py
    ```
-
    3 modes to choose via `--mode`:
+
    - grid: runs over all permutations of parameter sets
    - sensitivity: given base params, only change one parameter at a time
    - both

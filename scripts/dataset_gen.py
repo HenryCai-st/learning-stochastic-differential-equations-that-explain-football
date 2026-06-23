@@ -1,49 +1,35 @@
+from matplotlib import pyplot as plt
 import numpy as np
-import matplotlib.pyplot as plt
+
 # ============================================================
-# LORENZ SDE DATASET GENERATION
+# CONFIG
 # ============================================================
 
-# def generate_lorenz_dataset(num_samples=1000):
+NUM_SAMPLES = 1000 #1000
+T = 50
+dt = 0.01
+CUT = 1000
 
-#     dataset = []
-#     for _ in range(num_samples):
-#         sigma, rho, beta, epsilon = sample_params()
-#         x, y, z = simulate_lorenz_sde(sigma, rho, beta, epsilon)
-#         trajectory_2d = (x, y)
-#         label = 0 if rho < 1.0 else 1
-#         sample = {
-#             "trajectory": trajectory_2d,
-#             "params": (sigma, rho, beta, epsilon),
-#             "label": label
-#         }
-#         dataset.append(sample)
-
-#     return dataset
-
-
-
-sample = {
-     "trajectory": [(x1, y1), (x2, y2), ..., (xT, yT)],
-     "params": (sigma, rho, beta, epsilon),
-    "label": 0 or 1   # fixed / chaos
-}
-
-trajectory_2d = (x, y)
+# ============================================================
+# PARAM SAMPLING
+# ============================================================
 
 def sample_params():
     sigma = np.random.uniform(1, 20)
     beta  = np.random.uniform(0.5, 5)
 
-    # Balanced sampling for rho
     if np.random.rand() < 0.5:
-        rho = np.random.uniform(0.5, 1.0)      # fixed
+        rho = np.random.uniform(0.5, 1.0)   # fixed
     else:
-        rho = np.random.uniform(25, 50)        # chaos
+        rho = np.random.uniform(25, 50)     # chaos
 
     epsilon = np.random.uniform(0.0, 1.5)
 
     return sigma, rho, beta, epsilon
+
+# ============================================================
+# SIMULATION
+# ============================================================
 
 def simulate_lorenz_sde(sigma, rho, beta, epsilon, T=50, dt=0.01):
     N = int(T / dt)
@@ -52,7 +38,6 @@ def simulate_lorenz_sde(sigma, rho, beta, epsilon, T=50, dt=0.01):
     y = np.zeros(N)
     z = np.zeros(N)
 
-    # random initial condition (IMPORTANT)
     x[0], y[0], z[0] = np.random.randn(3)
 
     for i in range(N - 1):
@@ -66,10 +51,12 @@ def simulate_lorenz_sde(sigma, rho, beta, epsilon, T=50, dt=0.01):
 
     return x, y, z
 
-def remove_transient(x, y, z, cut=1000):
-    return x[cut:], y[cut:], z[cut:]
+# ============================================================
+# PROCESSING
+# ============================================================
 
-trajectory = np.stack([x, y], axis=1)
+def remove_transient(x, y, z, cut):
+    return x[cut:], y[cut:], z[cut:]
 
 def normalize_traj(traj):
     min_vals = traj.min(axis=0)
@@ -78,36 +65,71 @@ def normalize_traj(traj):
 
 def label_from_rho(rho):
     if rho < 1.0:
-        return 0   # fixed
+        return 0
     elif rho > 24.7:
-        return 1   # chaos
+        return 1
     else:
-        return None  # skip ambiguous
-    
-    dataset = []
+        return None
 
-for _ in range(NUM_SAMPLES):
+# ============================================================
+# DATASET GENERATION
+# ============================================================
+
+dataset = []
+
+DEBUG_SHOW = 5   # show first 5 samples only
+
+for i in range(NUM_SAMPLES):
+
     sigma, rho, beta, epsilon = sample_params()
 
     label = label_from_rho(rho)
     if label is None:
         continue
 
-    x, y, z = simulate_lorenz_sde(sigma, rho, beta, epsilon)
-    x, y, z = remove_transient(x, y, z)
+    x, y, z = simulate_lorenz_sde(sigma, rho, beta, epsilon, T, dt)
+    x, y, z = remove_transient(x, y, z, CUT)
 
     traj = np.stack([x, y], axis=1)
     traj = normalize_traj(traj)
+
+    # ============================================================
+    # 🔍 DEBUG VISUALIZATION
+    # ============================================================
+
+    if i < DEBUG_SHOW:
+        print("\n==============================")
+        print(f"Sample {i}")
+        print(f"sigma={sigma:.3f}, rho={rho:.3f}, beta={beta:.3f}, epsilon={epsilon:.3f}")
+        print(f"label = {label}")
+        print("==============================")
+
+        plt.figure(figsize=(5, 5))
+        plt.plot(traj[:, 0], traj[:, 1], linewidth=0.8)
+        plt.title(f"Lorenz SDE (label={label})")
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.axis("equal")
+        plt.show()
+
+    # ============================================================
+    # STORE SAMPLE
+    # ============================================================
 
     dataset.append({
         "trajectory": traj.astype(np.float32),
         "params": np.array([sigma, rho, beta, epsilon], dtype=np.float32),
         "label": label
     })
+# ============================================================
+# SAVE
+# ============================================================
 
-    np.savez(
+np.savez(
     "lorenz_dataset.npz",
-    trajectories=[d["trajectory"] for d in dataset],
-    params=[d["params"] for d in dataset],
-    labels=[d["label"] for d in dataset]
+    trajectories=np.array([d["trajectory"] for d in dataset], dtype=object),
+    params=np.array([d["params"] for d in dataset]),
+    labels=np.array([d["label"] for d in dataset])
 )
+
+print(f"Saved {len(dataset)} samples.")

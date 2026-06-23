@@ -1,0 +1,410 @@
+"""
+player_movement_sdes.py
+=======================
+Four SDE models for 2D football player movement,
+ordered from simplest to most realistic.
+
+Run:   python player_movement_sdes.py
+Needs: numpy matplotlib
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from pathlib import Path
+
+# Output folder sits next to this script; created on any OS automatically.
+OUT_DIR = Path(__file__).resolve().parent / "outputs"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+RNG = np.random.default_rng(42)
+FIELD_W, FIELD_H = 100, 68   # metres (standard pitch)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared Euler-Maruyama helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def euler_maruyama(drift_fn, diffusion_fn, state0, T=10.0, dt=0.04):
+    """
+    Generic Euler-Maruyama integrator.
+
+    drift_fn(state)     -> np.ndarray same shape as state
+    diffusion_fn(state) -> np.ndarray same shape as state
+                           (diagonal noise — each dim gets independent W)
+
+    Returns array of shape (n_steps, len(state0)).
+    """
+    n   = int(T / dt)
+    dim = len(state0)
+    traj = np.zeros((n, dim))
+    traj[0] = state0
+
+    sqrt_dt = np.sqrt(dt)
+    for i in range(n - 1):
+        s   = traj[i]
+        dW  = RNG.standard_normal(dim) * sqrt_dt
+        traj[i+1] = s + drift_fn(s) * dt + diffusion_fn(s) * dW
+
+    return traj
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model 1 — Pure Brownian motion (baseline)
+# ─────────────────────────────────────────────────────────────────────────────
+# State: (x, y)
+#   dx = σ dW_x
+#   dy = σ dW_y
+#
+# This is a completely memoryless random walk.
+# Trajectories look like a drunk walk — no directionality, no inertia.
+# Useful only as a sanity-check baseline.
+
+def simulate_brownian(x0, y0, sigma=0.8, T=10.0, dt=0.04):
+    state0     = np.array([x0, y0])
+    drift_fn   = lambda s: np.zeros(2)
+    diff_fn    = lambda s: np.array([sigma, sigma])
+    return euler_maruyama(drift_fn, diff_fn, state0, T, dt)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model 2 — Ornstein-Uhlenbeck velocity (iOU / integrated OU)
+# ─────────────────────────────────────────────────────────────────────────────
+# State: (x, y, vx, vy)
+#
+#   dvx = -theta * (vx - mu_x) dt + sigma_v dW_x
+#   dvy = -theta * (vy - mu_y) dt + sigma_v dW_y
+#   dx  = vx dt
+#   dy  = vy dt
+#
+# Velocity mean-reverts to (mu_x, mu_y) at rate theta.
+# Position is the integral of that velocity → smooth, inertial paths.
+# Trajectories show sustained direction with gradual changes.
+#
+# Physical interpretation:
+#   theta    = agility / responsiveness (large = quick direction changes)
+#   mu_x,y   = preferred velocity direction and magnitude
+#   sigma_v  = velocity noise / unpredictability
+
+def simulate_ou_velocity(x0, y0, vx0=2.0, vy0=0.5,
+                          theta=0.8, mu_x=1.5, mu_y=0.0,
+                          sigma_v=1.2, T=10.0, dt=0.04):
+    state0 = np.array([x0, y0, vx0, vy0])
+
+    def drift(s):
+        x, y, vx, vy = s
+        return np.array([
+            vx,
+            vy,
+            -theta * (vx - mu_x),   # velocity reverts to mu_x
+            -theta * (vy - mu_y),
+        ])
+
+    def diffusion(s):
+        return np.array([0.0, 0.0, sigma_v, sigma_v])
+
+    return euler_maruyama(drift, diffusion, state0, T, dt)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model 3 — Correlated random walk: speed + heading angle (recommended)
+# ─────────────────────────────────────────────────────────────────────────────
+# State: (x, y, v, theta)
+#
+#   dtheta = -kappa * theta dt + sigma_theta dW_1   (heading OU around 0)
+#   dv     = -gamma * (v - v0) dt + sigma_v dW_2   (speed OU around v0)
+#   dx     = v * cos(theta) dt
+#   dy     = v * sin(theta) dt
+#
+# This is the model that produces the movement patterns you described:
+#   - Straight dash:    theta ≈ 0, v ≈ v0
+#   - Backward cut:     theta flips sign rapidly (kappa small → slow return)
+#   - Oval arc:         theta oscillates slowly around 0
+#   - Sprint burst:     v temporarily >> v0
+#
+# Parameters for SBI (your inference targets):
+#   kappa       = turning rate (how quickly heading corrects)
+#   v0          = preferred cruising speed
+#   sigma_theta = directional noise (how chaotic the direction is)
+#   sigma_v     = speed noise
+
+def simulate_crw(x0, y0, v0_init=3.0, theta0=0.2,
+                  kappa=0.6, v0=4.0, sigma_theta=0.5, sigma_v=0.8,
+                  T=10.0, dt=0.04):
+    state0 = np.array([x0, y0, v0_init, theta0])
+
+    def drift(s):
+        x, y, v, theta = s
+        return np.array([
+            v * np.cos(theta),
+            v * np.sin(theta),
+            -0.4 * (v - v0),          # speed mean-reversion
+            -kappa * theta,            # heading mean-reversion
+        ])
+
+    def diffusion(s):
+        x, y, v, theta = s
+        return np.array([0.0, 0.0, sigma_v, sigma_theta])
+
+    return euler_maruyama(drift, diffusion, state0, T, dt)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model 4 — Social force model (most realistic, needs tracking data)
+# ─────────────────────────────────────────────────────────────────────────────
+# State: (x, y, vx, vy)
+#
+#   dv = [F_goal + F_ball + F_opponents + F_teammates] dt + sigma dW
+#
+#   F_goal      = alpha * (goal_pos - pos) / |goal_pos - pos|
+#   F_ball      = beta  * (ball_pos  - pos) / |ball_pos  - pos|
+#   F_opp       = sum_j gamma * -exp(-|pos - opp_j| / r_rep) * unit_vector
+#   F_team      = delta * (team_centroid - pos) / |team_centroid - pos|
+#   F_friction  = -eta * v    (speed limiter)
+#
+# This directly maps to the alpha, beta, gamma, delta in your tutor's slides.
+# The parameters are your SBI inference targets.
+
+def simulate_social_force(
+    x0, y0, vx0=1.0, vy0=0.5,
+    goal_pos=None,       # tactical target position
+    ball_pos=None,       # current ball position
+    opponent_pos=None,   # list of (x,y) opponent positions
+    team_centroid=None,  # centroid of own team
+    alpha=1.2,           # goal attraction strength
+    beta=0.8,            # ball attraction strength
+    gamma=2.5,           # opponent repulsion strength
+    delta=0.4,           # team cohesion strength
+    eta=0.3,             # velocity damping (speed limiter)
+    sigma=0.5,           # noise
+    r_rep=6.0,           # opponent repulsion radius
+    T=10.0, dt=0.04,
+):
+    # Sensible defaults if not provided
+    if goal_pos     is None: goal_pos     = np.array([85.0, 34.0])
+    if ball_pos     is None: ball_pos     = np.array([50.0, 34.0])
+    if opponent_pos is None: opponent_pos = [np.array([55.0, 34.0]),
+                                             np.array([62.0, 25.0])]
+    if team_centroid is None: team_centroid = np.array([40.0, 34.0])
+
+    state0 = np.array([x0, y0, vx0, vy0])
+
+    def safe_unit(vec, min_dist=0.5):
+        d = np.linalg.norm(vec)
+        return vec / max(d, min_dist), d
+
+    def drift(s):
+        x, y, vx, vy = s
+        pos = np.array([x, y])
+        v   = np.array([vx, vy])
+
+        # Goal attraction
+        u_goal, _ = safe_unit(goal_pos - pos)
+        F_goal = alpha * u_goal
+
+        # Ball attraction
+        u_ball, _ = safe_unit(ball_pos - pos)
+        F_ball = beta * u_ball
+
+        # Opponent repulsion (sum over all opponents)
+        F_opp = np.zeros(2)
+        for opp in opponent_pos:
+            vec_away = pos - opp
+            dist = np.linalg.norm(vec_away)
+            if dist < r_rep * 2:
+                u_away, d = safe_unit(vec_away)
+                F_opp += gamma * np.exp(-d / r_rep) * u_away
+
+        # Team centroid attraction (formation cohesion)
+        u_team, _ = safe_unit(team_centroid - pos)
+        F_team = delta * u_team
+
+        # Velocity friction (prevents infinite acceleration)
+        F_friction = -eta * v
+
+        total_force = F_goal + F_ball + F_opp + F_team + F_friction
+
+        return np.array([vx, vy, total_force[0], total_force[1]])
+
+    def diffusion(s):
+        return np.array([0.0, 0.0, sigma, sigma])
+
+    return euler_maruyama(drift, diffusion, state0, T, dt)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Visualisation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def draw_pitch(ax):
+    """Draw a simple football pitch outline."""
+    ax.set_facecolor("#2d6a2d")
+    # Pitch boundary
+    ax.plot([0, FIELD_W, FIELD_W, 0, 0], [0, 0, FIELD_H, FIELD_H, 0],
+            'w-', lw=1.2)
+    # Centre line + circle
+    ax.axvline(FIELD_W / 2, color='w', lw=0.8, alpha=0.6)
+    circle = plt.Circle((FIELD_W/2, FIELD_H/2), 9.15, color='w',
+                         fill=False, lw=0.8, alpha=0.6)
+    ax.add_patch(circle)
+    # Penalty areas
+    for xl in [0, FIELD_W - 16.5]:
+        rect = plt.Rectangle((xl, (FIELD_H - 40.32)/2), 16.5, 40.32,
+                               edgecolor='w', facecolor='none', lw=0.8, alpha=0.6)
+        ax.add_patch(rect)
+    ax.set_xlim(0, FIELD_W)
+    ax.set_ylim(0, FIELD_H)
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+
+def plot_traj(ax, traj_xy, color, label):
+    x, y = traj_xy[:, 0], traj_xy[:, 1]
+    ax.plot(x, y, color=color, lw=1.4, alpha=0.85, label=label)
+    ax.plot(x[0], y[0], 'o', color='white', ms=5, zorder=5)
+    ax.plot(x[-1], y[-1], 's', color=color,  ms=6, zorder=5,
+            markeredgecolor='white', markeredgewidth=0.8)
+
+
+if __name__ == "__main__":
+    np.random.seed(42)
+
+    START = (30.0, 34.0)   # kick-off area
+    T, DT = 12.0, 0.04
+
+    # ── simulate ─────────────────────────────────────────────────────────────
+    traj_bm  = simulate_brownian(*START, sigma=0.8, T=T, dt=DT)
+    traj_ou  = simulate_ou_velocity(*START, T=T, dt=DT)
+    traj_crw = simulate_crw(*START, T=T, dt=DT)
+    traj_sf  = simulate_social_force(*START, T=T, dt=DT)
+
+    # Social force gives (x,y,vx,vy); extract only x,y for display
+    traj_ou_xy  = traj_ou[:, :2]
+    traj_crw_xy = traj_crw[:, :2]
+    traj_sf_xy  = traj_sf[:, :2]
+
+    # ── multi-panel comparison figure ────────────────────────────────────────
+    fig = plt.figure(figsize=(15, 10))
+    fig.patch.set_facecolor('#1a1a2e')
+
+    gs  = gridspec.GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.15)
+    configs = [
+        (gs[0, 0], traj_bm,      "#aaaaaa", "1. Brownian motion",
+         "σ = 0.8\nNo memory — pure random walk"),
+        (gs[0, 1], traj_ou_xy,   "#4fc3f7", "2. OU velocity (integrated OU)",
+         "θ=0.8, μ=(1.5,0), σᵥ=1.2\nSmooth inertial drift"),
+        (gs[1, 0], traj_crw_xy,  "#81c784", "3. Correlated random walk ✓",
+         "κ=0.6, v₀=4, σ_θ=0.5, σᵥ=0.8\nDash + cut + arc patterns"),
+        (gs[1, 1], traj_sf_xy,   "#ffb74d", "4. Social force model",
+         "α=1.2 (goal), β=0.8 (ball)\nγ=2.5 (repulsion), δ=0.4 (team)"),
+    ]
+
+    for spec, traj, col, title, subtitle in configs:
+        ax = fig.add_subplot(spec)
+        draw_pitch(ax)
+        plot_traj(ax, traj, col, "trajectory")
+
+        # Panel title
+        ax.set_title(title, color='white', fontsize=11,
+                     fontweight='bold', pad=6)
+        ax.text(0.5, -0.04, subtitle, transform=ax.transAxes,
+                ha='center', va='top', fontsize=8.5, color='#cccccc')
+
+        # Start / end legend
+        ax.plot([], [], 'o', color='white', ms=5, label='Start')
+        ax.plot([], [], 's', color=col,   ms=6, label='End',
+                markeredgecolor='white', markeredgewidth=0.8)
+        ax.legend(fontsize=7, loc='upper right',
+                  facecolor='#333355', labelcolor='white', framealpha=0.7)
+
+    # Extra: social force context objects
+    ax_sf = fig.axes[3]
+    ball = plt.Circle((50, 34), 1.5, color='white', alpha=0.6)
+    ax_sf.add_patch(ball)
+    ax_sf.text(50, 32, 'ball', color='white', fontsize=7, ha='center')
+    opp_positions = [(55, 34), (62, 25)]
+    for ox, oy in opp_positions:
+        ax_sf.plot(ox, oy, 'v', color='#ef5350', ms=8, zorder=4)
+    goal = plt.Circle((85, 34), 2, color='#ffee58', alpha=0.5)
+    ax_sf.add_patch(goal)
+    ax_sf.text(85, 31, 'target', color='#ffee58', fontsize=7, ha='center')
+
+    fig.suptitle(
+        "SDE Models for 2D Football Player Movement\n"
+        "○ = start   ■ = end   (trajectory = 12 seconds at 25 Hz)",
+        color='white', fontsize=13, fontweight='bold', y=0.98,
+    )
+
+    out = OUT_DIR / "player_movement_sdes.png"
+    plt.savefig(out, dpi=140, bbox_inches='tight', facecolor=fig.get_facecolor())
+    plt.close()
+    print(f"Saved: {out}")
+
+    # ── overlay: all four on one pitch ───────────────────────────────────────
+    fig2, ax2 = plt.subplots(figsize=(10, 7))
+    fig2.patch.set_facecolor('#1a1a2e')
+    draw_pitch(ax2)
+
+    pairs = [
+        (traj_bm,      "#aaaaaa", "1. Brownian"),
+        (traj_ou_xy,   "#4fc3f7", "2. OU velocity"),
+        (traj_crw_xy,  "#81c784", "3. CRW (recommended)"),
+        (traj_sf_xy,   "#ffb74d", "4. Social force"),
+    ]
+    for traj, col, lbl in pairs:
+        plot_traj(ax2, traj, col, lbl)
+
+    ax2.legend(fontsize=10, loc='upper right',
+               facecolor='#333355', labelcolor='white', framealpha=0.8)
+    ax2.set_title("All four models — same start position, 12 seconds",
+                  color='white', fontsize=12, fontweight='bold')
+
+    out2 = OUT_DIR / "player_movement_overlay.png"
+    plt.savefig(out2, dpi=140, bbox_inches='tight', facecolor=fig2.get_facecolor())
+    plt.close()
+    print(f"Saved: {out2}")
+
+    # ── CRW parameter sensitivity ─────────────────────────────────────────────
+    # Show how changing kappa and sigma_theta changes the trajectory shape
+    fig3, axes3 = plt.subplots(2, 3, figsize=(13, 9))
+    fig3.patch.set_facecolor('#1a1a2e')
+    fig3.suptitle("Model 3 (CRW) — Parameter sensitivity\n"
+                  "Top: vary κ (turning rate)   Bottom: vary σ_θ (directional noise)",
+                  color='white', fontsize=12, fontweight='bold')
+
+    kappas     = [0.1, 0.6, 2.5]
+    sigma_thts = [0.1, 0.5, 1.5]
+
+    for j, kappa in enumerate(kappas):
+        ax = axes3[0, j]
+        draw_pitch(ax)
+        traj = simulate_crw(*START, kappa=kappa, sigma_theta=0.5, T=T, dt=DT)
+        plot_traj(ax, traj[:, :2], "#81c784", "")
+        ax.set_title(f"κ = {kappa}", color='white', fontsize=10)
+        meaning = {0.1: "slow turns\n→ long straight dashes",
+                   0.6: "moderate turns",
+                   2.5: "rapid cuts\n→ short erratic bursts"}
+        ax.text(0.5, -0.04, meaning[kappa], transform=ax.transAxes,
+                ha='center', fontsize=8, color='#cccccc')
+
+    for j, sig in enumerate(sigma_thts):
+        ax = axes3[1, j]
+        draw_pitch(ax)
+        traj = simulate_crw(*START, kappa=0.6, sigma_theta=sig, T=T, dt=DT)
+        plot_traj(ax, traj[:, :2], "#ce93d8", "")
+        ax.set_title(f"σ_θ = {sig}", color='white', fontsize=10)
+        meaning = {0.1: "very predictable\n→ near-straight",
+                   0.5: "realistic athlete",
+                   1.5: "highly unpredictable\n→ chaotic direction"}
+        ax.text(0.5, -0.04, meaning[sig], transform=ax.transAxes,
+                ha='center', fontsize=8, color='#cccccc')
+
+    out3 = OUT_DIR / "crw_sensitivity.png"
+    plt.savefig(out3, dpi=140, bbox_inches='tight', facecolor=fig3.get_facecolor())
+    plt.close()
+    print(f"Saved: {out3}")
+
+    print("\nDone. Suggested next step:")
+    print("  Use Model 3 (CRW) as your simulator.")
+    print("  Inference targets: theta = (kappa, v0, sigma_theta, sigma_v)")
+    print("  Connect to football_sde_demo.py: replace simulate_sde() with simulate_crw()")

@@ -15,25 +15,28 @@ The standard Lorenz SDE adds diffusion to the deterministic skeleton:
 $$
 dx = \sigma(y - x)\,dt + \epsilon\,dW_x
 $$
+
 $$
 dy = (x(\rho - z) - y)\,dt + \epsilon\,dW_y
 $$
+
 $$
 dz = (xy - \beta z)\,dt + \epsilon\,dW_z
 $$
 
 with parameters $\sigma$ (Prandtl number), $\rho$ (Rayleigh number), $\beta$ (geometric factor), and $\epsilon$ (noise scale).
+$W$ Wiener process stands for white noise.
 
 ### Dynamical Regimes
 
 The regime is primarily governed by $\rho$, with $\sigma$ and $\beta$ playing secondary roles:
 
-| Regime | Typical $\rho$ | Behaviour |
-|--------|---------------|-----------|
-| **Fixed point** | $\rho < 1$ | All trajectories decay to origin |
-| **Stable fixed points** | $1 < \rho \lesssim 13.9$ | Trajectories settle to one of two symmetric attractors $C^\pm$ |
-| **Limit cycle / transient chaos** | $13.9 \lesssim \rho \lesssim 24.1$ | Complex transients; some parameter pockets show periodic orbits |
-| **Chaos** | $\rho \gtrsim 24.74$ | Classic butterfly attractor; the well-known strange attractor appears near $\rho \approx 28$ |
+| Regime                                  | Typical$\rho$                  | Behaviour                                                                                     |
+| :-------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| **Fixed point**                   | $\rho < 1$                         | All trajectories decay to origin                                                              |
+| **Stable fixed points**           | $1 < \rho \lesssim 13.9$           | Trajectories settle to one of two symmetric attractors$C^\pm$                               |
+| **Limit cycle / transient chaos** | $13.9 \lesssim \rho \lesssim 24.1$ | Complex transients; some parameter pockets show periodic orbits                               |
+| **Chaos**                         | $\rho \gtrsim 24.74$               | Classic butterfly attractor; the well-known strange attractor appears near$\rho \approx 28$ |
 
 > **Note:** The boundary $\rho \approx 24.74$ is the subcritical Hopf bifurcation point for the canonical $\sigma = 10$, $\beta = 8/3$. If you vary $\sigma$ or $\beta$, these boundaries shift.
 
@@ -66,13 +69,13 @@ Two ratios are particularly important:
 
 ### The Choice
 
-| Approach | Fixed axes | Auto-scaled axes |
-|----------|-----------|-----------------|
-| **What is preserved** | Absolute trajectory magnitude | Shape / topology |
-| **What is lost** | Pattern clarity for small attractors | Size information |
-| **Risk** | Fixed-point and small-$\rho$ trajectories look tiny | Network may confuse scale-related amplitude with regime |
-
 Since the stated goal is **approximating patterns, not sizes**, auto-scaling is generally preferable. However, there are nuances:
+
+| Approach                    | Fixed axes                                            | Auto-scaled axes                                        |
+| --------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| **What is preserved** | Absolute trajectory magnitude                         | Shape / topology                                        |
+| **What is lost**      | Pattern clarity for small attractors                  | Size information                                        |
+| **Risk**              | Fixed-point and small-$\rho$ trajectories look tiny | Network may confuse scale-related amplitude with regime |
 
 ### Recommendations
 
@@ -88,12 +91,12 @@ Since the stated goal is **approximating patterns, not sizes**, auto-scaling is 
 
 ### Parameters
 
-| Parameter | Suggested scaling | Rationale |
-|-----------|-----------------|-----------|
-| $\sigma$ | **Min-max** to $[0,1]$ | Roughly linear effect; no heavy tail |
-| $\rho$ | **Log then min-max** or **Z-score on log** | Large dynamic range; regime boundaries are log-spaced |
-| $\beta$ | **Min-max** to $[0,1]$ | Narrow range, well-behaved |
-| $\epsilon$ | **Log then min-max** | Noise scale spans orders of magnitude; log-transform prevents small $\epsilon$ from being compressed near zero |
+| Parameter    | Suggested scaling                                      | Rationale                                                                                                       |
+| ------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| $\sigma$   | **Min-max** to $[0,1]$                         | Roughly linear effect; no heavy tail                                                                            |
+| $\rho$     | **Log then min-max** or **Z-score on log** | Large dynamic range; regime boundaries are log-spaced                                                           |
+| $\beta$    | **Min-max** to $[0,1]$                         | Narrow range, well-behaved                                                                                      |
+| $\epsilon$ | **Log then min-max**                             | Noise scale spans orders of magnitude; log-transform prevents small$\epsilon$ from being compressed near zero |
 
 **On log-transforming $\epsilon$:**
 
@@ -132,11 +135,11 @@ This is the standard convention for GAN-style generators and works well with tan
 
 This is the most consequential design decision, and there is a real argument for **training on only 2 regimes** (e.g. fixed-point and chaotic), at least initially:
 
-| Strategy | Pros | Cons |
-|----------|------|------|
-| **3 regimes** | Full coverage; network learns all dynamics | Limit cycle regime is poorly defined; ambiguous labels near boundaries |
-| **2 regimes (fixed + chaos)** | Cleaner decision boundary; easier to validate | Ignores the transient/limit-cycle regime entirely |
-| **2 regimes (fixed + non-fixed)** | Simple binary task; maximum label confidence | Chaotic and limit-cycle lumped together |
+| Strategy                                | Pros                                          | Cons                                                                   |
+| --------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| **3 regimes**                     | Full coverage; network learns all dynamics    | Limit cycle regime is poorly defined; ambiguous labels near boundaries |
+| **2 regimes (fixed + chaos)**     | Cleaner decision boundary; easier to validate | Ignores the transient/limit-cycle regime entirely                      |
+| **2 regimes (fixed + non-fixed)** | Simple binary task; maximum label confidence  | Chaotic and limit-cycle lumped together                                |
 
 **Recommendation:** Start with **2 regimes** — fixed-point vs. chaotic — with a strict exclusion zone around the limit-cycle region ($13.9 < \rho < 24.74$ for canonical parameters). This gives clean labels and avoids the hardest boundary cases. The network can always be extended to 3 classes once the 2-class task is validated.
 
@@ -196,14 +199,14 @@ Dropping unlabelled samples gives you a high-confidence binary dataset without a
 
 ## Summary Table
 
-| Design decision | Recommended choice |
-|-----------------|-------------------|
-| $\rho$ sampling | Stratified + log-spaced within each regime |
-| Axis scaling | Per-trajectory uniform scale (preserve 3D aspect ratio) |
-| Image type | 3-projection density map, 64×64 or 128×128 |
-| $\sigma$, $\beta$ normalisation | Min-max $[0,1]$ |
-| $\rho$ normalisation | Log → min-max |
-| $\epsilon$ normalisation | `log1p` → min-max |
-| Image normalisation | $[-1, 1]$ via `img * 2 - 1` |
-| Number of regimes | **2** (fixed-point vs. chaos), exclude limit-cycle band |
-| Label source | Parameters only, using analytical bifurcation formula |
+| Design decision                     | Recommended choice                                            |
+| ----------------------------------- | ------------------------------------------------------------- |
+| $\rho$ sampling                   | Stratified + log-spaced within each regime                    |
+| Axis scaling                        | Per-trajectory uniform scale (preserve 3D aspect ratio)       |
+| Image type                          | 3-projection density map, 64×64 or 128×128                  |
+| $\sigma$, $\beta$ normalisation | Min-max$[0,1]$                                              |
+| $\rho$ normalisation              | Log → min-max                                                |
+| $\epsilon$ normalisation          | `log1p` → min-max                                          |
+| Image normalisation                 | $[-1, 1]$ via `img * 2 - 1`                               |
+| Number of regimes                   | **2** (fixed-point vs. chaos), exclude limit-cycle band |
+| Label source                        | Parameters only, using analytical bifurcation formula         |
