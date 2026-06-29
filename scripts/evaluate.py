@@ -1,7 +1,7 @@
 """
 evaluate.py
 ===========
-Posterior predictive evaluation for route-A classification-based SBI.
+Posterior predictive evaluation for SBI via ratio estimation.
 
 Pipeline:
   1. Generate one ground-truth SDE trajectory with known parameters.
@@ -230,7 +230,7 @@ def build_figure(
     fig.update_layout(
         title=dict(
             text=(
-                "Route-A SBI posterior predictive evaluation "
+                "SBI posterior predictive evaluation "
                 f"(ESS={posterior['ess']:.1f}, entropy={posterior['entropy']:.2f})"
             ),
             font=dict(size=15),

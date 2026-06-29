@@ -1,7 +1,7 @@
 """
 train_ratio_classifier.py
 ====================
-Stage 1 route-A training: classification-based SBI / ratio estimation.
+Stage 1 training for SBI via ratio estimation.
 
 This script trains a matched-vs-mismatched classifier C_phi(D, theta):
   positive pairs: trajectory D and the parameter theta that generated it
@@ -13,7 +13,7 @@ likelihood-to-evidence log-ratio up to the usual class-prior convention:
 
 The trajectory encoder can still be viewed as a contrastive feature extractor,
 but the core objective is BCE on matched-vs-mismatched pairs, not triplet or
-SimCLR. This matches the chosen route A from the project discussion.
+SimCLR. This follows the project plan: infer a posterior over parameters before simulating predictive trajectories.
 """
 
 import argparse
@@ -147,7 +147,7 @@ def main():
 
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device} | Route A: matched-vs-mismatched ratio classifier")
+    print(f"Device: {device} | Matched-vs-mismatched ratio classifier")
 
     if args.batch_size < 2:
         raise ValueError("--batch_size must be at least 2 for mismatched-pair training")

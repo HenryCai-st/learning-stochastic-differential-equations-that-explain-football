@@ -1,10 +1,10 @@
 """
 recover_posterior.py
 ==================
-Route-A posterior recovery step for the trained ratio classifier.
+Posterior recovery step for the trained ratio classifier.
 
-Historically this file trained a direct regressor q(theta | track). That was route B.
-For the chosen route A, we instead load C_phi(D, theta), score candidate theta values,
+Historically this file trained a direct regressor q(theta | track).
+The current workflow loads C_phi(D, theta), scores candidate theta values,
 and approximate the posterior with normalized ratio weights:
 
   p(theta | D) ∝ p(theta) r_phi(D, theta)
