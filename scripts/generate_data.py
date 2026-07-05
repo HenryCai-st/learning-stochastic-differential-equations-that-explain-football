@@ -9,6 +9,7 @@ Saves a compressed .npz file containing trajectories, parameters, group IDs, and
 import argparse
 from pathlib import Path
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 PARAMETER_NAMES = np.array(["sigma", "rho", "beta", "noise_scale"])
@@ -114,6 +115,101 @@ def simulate_batch(
     return tracks
 
 
+def rho_regime_labels(rho_values: np.ndarray) -> np.ndarray:
+    """Map rho values to regime labels used only for diversity visualization."""
+    labels = np.empty(len(rho_values), dtype=object)
+    labels[rho_values < RHO_REGIME_BOUNDS[1]] = "fixed/decay"
+    labels[(rho_values >= RHO_REGIME_BOUNDS[1]) & (rho_values < RHO_REGIME_BOUNDS[2])] = "transition"
+    labels[rho_values >= RHO_REGIME_BOUNDS[2]] = "chaos"
+    return labels
+
+
+def plot_dataset_diversity(
+    tracks: np.ndarray,
+    parameters: np.ndarray,
+    out_path: Path,
+    max_tracks: int = 300,
+    seed: int = 42,
+) -> None:
+    """
+    Plot many generated trajectories in XY projection to show dataset diversity.
+
+    The plot is intentionally simple for a report/presentation: each line is one
+    rendered trajectory, colored by Lorenz rho regime.
+    
+    Saves both a combined plot and separate plots for each regime.
+    """
+    rng = np.random.default_rng(seed)
+    n = len(tracks)
+    if n == 0:
+        raise ValueError("No trajectories available for diversity plotting.")
+
+    chosen = rng.choice(n, size=min(max_tracks, n), replace=False)
+    labels = rho_regime_labels(parameters[chosen, 1])
+    colors = {
+        "fixed/decay": "tab:blue",
+        "transition": "tab:orange",
+        "chaos": "tab:green",
+    }
+
+    # Create output directory
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # --- Combined plot (all regimes together) ---
+    fig, ax = plt.subplots(figsize=(8.0, 6.5))
+    for idx, label in zip(chosen, labels):
+        xy = tracks[idx, :, :2]
+        ax.plot(xy[:, 0], xy[:, 1], color=colors[label], alpha=0.18, linewidth=0.8)
+
+    # Add clean legend entries once per regime.
+    for label, color in colors.items():
+        ax.plot([], [], color=color, linewidth=2, label=label)
+
+    ax.set_title(f"Generated Lorenz SDE trajectories: dataset diversity, {len(chosen)} tracks")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.grid(True, alpha=0.25)
+    ax.legend(title="rho regime", frameon=True)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=220)
+    plt.close(fig)
+    
+    # --- Separate plots for each regime ---
+    for regime_name, color in colors.items():
+        # Get indices for this regime
+        regime_indices = [i for i, label in enumerate(labels) if label == regime_name]
+        
+        if len(regime_indices) == 0:
+            print(f"Warning: No trajectories found for regime '{regime_name}'")
+            continue
+        
+        # Create figure for this regime
+        fig, ax = plt.subplots(figsize=(8.0, 6.5))
+        
+        # Plot all trajectories in this regime
+        for idx in regime_indices:
+            xy = tracks[chosen[idx], :, :2]
+            ax.plot(xy[:, 0], xy[:, 1], color=color, alpha=0.25, linewidth=0.8)
+        
+        # Add a single legend entry for this regime
+        ax.plot([], [], color=color, linewidth=2, label=regime_name)
+        
+        # Create title with regime name
+        regime_display_name = regime_name.replace("/", " / ")  # Make "fixed/decay" more readable
+        ax.set_title(f"Lorenz SDE trajectories: {regime_display_name} regime, {len(regime_indices)} tracks")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.grid(True, alpha=0.25)
+        ax.legend(title="rho regime", frameon=True)
+        fig.tight_layout()
+        
+        # Save with regime name in filename
+        regime_filename = out_path.stem + f"_{regime_name.replace('/', '_')}" + out_path.suffix
+        regime_path = out_path.parent / regime_filename
+        fig.savefig(regime_path, dpi=220)
+        plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate Lorenz SDE dataset")
     parser.add_argument("--n_samples", type=int, default=200, help="Number of parameter sets to sample")
@@ -124,6 +220,8 @@ def main():
     parser.add_argument("--clip_value", type=float, default=100.0, help="State clipping threshold for unstable simulations")
     parser.add_argument("--out_dir", type=str, default="./data/lorenz_dataset", help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for generation")
+    parser.add_argument("--plot_diversity", action="store_true", help="Save an XY plot of generated trajectories to prove diversity")
+    parser.add_argument("--max_plot_tracks", type=int, default=300, help="Maximum trajectories drawn in diversity plot")
     args = parser.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -183,6 +281,18 @@ def main():
         clip_value=args.clip_value,
         seed=args.seed,
     )
+    print(f"Saved dataset to {out_dir / 'dataset.npz'}")
+
+    if args.plot_diversity:
+        diversity_path = out_dir / "dataset_diversity_xy.png"
+        plot_dataset_diversity(
+            all_tracks,
+            all_params,
+            diversity_path,
+            max_tracks=args.max_plot_tracks,
+            seed=args.seed + 999,
+        )
+        print(f"Saved diversity plot to {diversity_path}")
 
 
 if __name__ == "__main__":
