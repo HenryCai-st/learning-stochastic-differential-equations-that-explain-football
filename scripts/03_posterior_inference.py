@@ -54,7 +54,7 @@ from src.utils.features import (
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="RWMH MCMC posterior inference.")
-    p.add_argument("--dataset",        default=str(ROOT / "lorenz_dataset.npz"))
+    p.add_argument("--dataset",     default=str(ROOT / "data" / "data.npz"))
     p.add_argument("--mode",
                    choices=["logreg", "neural"],
                    default="logreg",
@@ -251,7 +251,7 @@ def plot_trace(chain: np.ndarray, burnin: int, out_path: Path) -> None:
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [plot] mcmc_trace → {out_path}")
+    print(f"  [plot] mcmc_trace  {out_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -276,7 +276,7 @@ def main() -> None:
     classifier_history = None
 
     if args.mode == "logreg":
-        print("[03_posterior_inference] Training logistic-regression classifier …")
+        print("[03_posterior_inference] Training logistic-regression classifier ")
         log_fn, observed_params, classifier_history = make_logreg_log_target(
             trajs, params, train_idx, val_idx,
             observed_index, args.max_points,
@@ -295,7 +295,7 @@ def main() -> None:
     theta_init = params[train_idx[0]].astype(np.float64).copy()
     theta_init = np.clip(theta_init, PRIOR_BOUNDS_ARRAY[:, 0], PRIOR_BOUNDS_ARRAY[:, 1])
 
-    print(f"[03_posterior_inference] Running RWMH (step_size={args.mcmc_step_size}) …")
+    print(f"[03_posterior_inference] Running RWMH (step_size={args.mcmc_step_size}) ")
     chain, accept_rate = rwmh_mcmc(
         log_target_fn=log_fn,
         theta_init=theta_init,
@@ -316,7 +316,7 @@ def main() -> None:
         observed_index=np.array(observed_index),
         prior_bounds=PRIOR_BOUNDS_ARRAY,
     )
-    print(f"[03_posterior_inference] Chain saved → {npz_path}")
+    print(f"[03_posterior_inference] Chain saved  {npz_path}")
 
     # ── 5. Trace plot ─────────────────────────────────────────────────────────
     plot_trace(chain, args.mcmc_burnin, out_dir / "mcmc_trace.png")

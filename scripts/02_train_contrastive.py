@@ -58,12 +58,12 @@ from src.utils.plotting import plot_training_curves
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train contrastive ratio estimator.")
-    p.add_argument("--dataset",     default=str(ROOT / "lorenz_dataset.npz"))
+    p.add_argument("--dataset",     default=str(ROOT / "data" / "data.npz"))
     p.add_argument("--task",
                    choices=["ratio", "contrastive", "regime", "params"],
                    default="ratio",
                    help="Training objective")
-    p.add_argument("--epochs",      type=int,   default=30)
+    p.add_argument("--epochs",      type=int,   default=50)
     p.add_argument("--batch-size",  type=int,   default=64)
     p.add_argument("--lr",          type=float, default=1e-3)
     p.add_argument("--max-points",  type=int,   default=512)
@@ -242,11 +242,11 @@ def main() -> None:
         )
         writer.writeheader()
         writer.writerows(history)
-    print(f"[02_train_contrastive] History → {csv_path}")
+    print(f"[02_train_contrastive] History  {csv_path}")
 
     # ── Plot training curves ──────────────────────────────────────────────────
     plot_training_curves(history, out_dir / "training_curves.png")
-    print(f"[02_train_contrastive] Best checkpoint → {out_dir / 'best.pt'}")
+    print(f"[02_train_contrastive] Best checkpoint  {out_dir / 'best.pt'}")
 
 
 if __name__ == "__main__":

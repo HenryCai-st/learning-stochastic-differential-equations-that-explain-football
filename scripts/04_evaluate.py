@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Evaluation and posterior visualisation.")
     p.add_argument("--chain",           default=str(ROOT / "outputs/inference/posterior_chain.npz"),
                    help="Path to posterior_chain.npz from step 3")
-    p.add_argument("--dataset",         default=str(ROOT / "lorenz_dataset.npz"),
+    p.add_argument("--dataset",         default=str(ROOT / "data" / "data.npz"),
                    help="Dataset file (needed to load the observed trajectory)")
     p.add_argument("--future-samples",  type=int, default=30,
                    help="Number of future trajectories to simulate from posterior")
@@ -111,7 +111,7 @@ def main() -> None:
     rng     = np.random.default_rng(args.seed)
 
     # ── 1. Load chain ─────────────────────────────────────────────────────────
-    print(f"[04_evaluate] Loading chain from {args.chain} …")
+    print(f"[04_evaluate] Loading chain from {args.chain} ")
     chain_data      = np.load(args.chain, allow_pickle=True)
     posterior       = chain_data["posterior"].astype(np.float64)    # (N, 4)
     observed_params = chain_data["observed_params"].astype(np.float64)  # (4,)
@@ -119,7 +119,7 @@ def main() -> None:
     prior_bounds    = chain_data["prior_bounds"].astype(np.float64) # (4, 2)
 
     print(f"  posterior samples: {len(posterior)}")
-    print(f"  observed θ*: { {n: round(float(v), 3) for n, v in zip(PARAM_NAMES, observed_params)} }")
+    print(f"  observed thete*: { {n: round(float(v), 3) for n, v in zip(PARAM_NAMES, observed_params)} }")
 
     # ── 2. Thin the chain ─────────────────────────────────────────────────────
     thinned = posterior[::args.thin]
@@ -137,7 +137,7 @@ def main() -> None:
     observed_traj = load_dataset_trajectory(args.dataset, observed_index)
 
     # ── 5. Simulate future paths from posterior samples ───────────────────────
-    print(f"[04_evaluate] Simulating {args.future_samples} posterior-predictive trajectories …")
+    print(f"[04_evaluate] Simulating {args.future_samples} posterior-predictive trajectories ")
     step = max(1, len(thinned) // args.future_samples)
     selected = thinned[::step][:args.future_samples]
 

@@ -86,7 +86,7 @@ def plot_posterior_vs_prior(
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [plot] posterior_vs_prior → {out_path}")
+    print(f"  [plot] posterior_vs_prior  {out_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ def plot_future_paths(
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [plot] future_paths → {out_path}")
+    print(f"  [plot] future_paths  {out_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -173,12 +173,22 @@ def plot_training_curves(
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [plot] training_curves → {out_path}")
+    print(f"  [plot] training_curves  {out_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataset diversity visualisation
 # ─────────────────────────────────────────────────────────────────────────────
+
+def classify_rho_regime(rho: float) -> str:
+    """Classify a Rayleigh number into one of the three requested regimes."""
+    rho = float(rho)
+    if rho <= 15.0:
+        return "fixed-point"
+    if rho <= 24.0:
+        return "curve"
+    return "chaotic/repulsor"
+
 
 def plot_generated_diversity(
     dataset:  list[dict],   # list of {"trajectory", "params", "label"}
@@ -186,43 +196,65 @@ def plot_generated_diversity(
 ) -> None:
     """
     Summary figure for the full generated dataset:
-      - Top-left  : all fixed-point trajectories overlaid
-      - Top-right : all chaotic trajectories overlaid
+      - Upper row: one subplot for each rho regime
       - Bottom row: histograms of σ, ρ, β, ε
+
+    Regime split:
+      • ρ ≤ 15  -> fixed-point
+      • 15 < ρ ≤ 24  -> curve
+      • ρ > 24  -> chaotic / repulsor
     """
     out_path = Path(out_path)
-    n_total  = len(dataset)
-    n_fp     = sum(1 for d in dataset if d["label"] == 0)
-    n_ch     = sum(1 for d in dataset if d["label"] == 1)
+
+    regime_groups: dict[str, list[dict]] = {
+        "fixed-point": [],
+        "curve": [],
+        "chaotic/repulsor": [],
+    }
+    for d in dataset:
+        params = np.asarray(d["params"], dtype=float)
+        rho = float(params[1]) if params.size > 1 else 0.0
+        regime_groups[classify_rho_regime(rho)].append(d)
+
+    n_total = len(dataset)
+    n_fp = len(regime_groups["fixed-point"])
+    n_curve = len(regime_groups["curve"])
+    n_ch = len(regime_groups["chaotic/repulsor"])
 
     fig = plt.figure(figsize=(16, 11))
     fig.suptitle(
         f"Generated Lorenz SDE Dataset — {n_total} trajectories  "
-        f"({n_fp} fixed-point  |  {n_ch} chaotic)",
+        f"({n_fp} fixed-point  |  {n_curve} curve  |  {n_ch} chaotic/repulsor)",
         fontsize=14, fontweight="bold", y=0.98,
     )
     gs = fig.add_gridspec(2, 4, hspace=0.38, wspace=0.35, height_ratios=[1.6, 1])
 
-    ax_fp    = fig.add_subplot(gs[0, :2])
-    ax_ch    = fig.add_subplot(gs[0, 2:])
+    ax_fp    = fig.add_subplot(gs[0, 0])
+    ax_curve = fig.add_subplot(gs[0, 1])
+    ax_ch    = fig.add_subplot(gs[0, 2])
+    # ax_blank = fig.add_subplot(gs[0, 3])
+    # ax_blank.axis("off")
     ax_sigma = fig.add_subplot(gs[1, 0])
     ax_rho   = fig.add_subplot(gs[1, 1])
     ax_beta  = fig.add_subplot(gs[1, 2])
     ax_eps   = fig.add_subplot(gs[1, 3])
 
-    for ax, lv, cmap_name, title in [
-        (ax_fp, 0, "Blues",   "Fixed-point trajectories  (ρ < 1)"),
-        (ax_ch, 1, "Oranges", "Chaotic trajectories  (ρ > 24.7)"),
+    for ax, subset, cmap_name, title in [
+        (ax_fp, regime_groups["fixed-point"], "Blues",
+         "Fixed-point trajectories  (ρ ≤ 15)"),
+        (ax_curve, regime_groups["curve"], "Greens",
+         "Curve trajectories  (15 < ρ ≤ 24)"),
+        (ax_ch, regime_groups["chaotic/repulsor"], "Reds",
+         "Chaotic / repulsor trajectories  (ρ > 24)"),
     ]:
-        subset = [d for d in dataset if d["label"] == lv]
-        n_sub  = len(subset)
-        cmap   = plt.get_cmap(cmap_name)
+        n_sub = len(subset)
+        cmap = plt.get_cmap(cmap_name)
         for k, d in enumerate(subset):
-            col  = cmap(0.25 + 0.65 * k / max(n_sub - 1, 1))
-            traj = d["trajectory"]
+            col = cmap(0.2 + 0.7 * k / max(n_sub - 1, 1))
+            traj = np.asarray(d["trajectory"], dtype=float)
             ax.plot(traj[:, 0], traj[:, 1],
                     lw=0.25, alpha=0.35, color=col, rasterized=True)
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title, fontsize=10)
         ax.set_xlabel("x (normalised)", fontsize=9)
         ax.set_ylabel("y (normalised)", fontsize=9)
         ax.set_xlim(0, 1); ax.set_ylim(0, 1)
@@ -244,4 +276,4 @@ def plot_generated_diversity(
 
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [plot] generated_diversity → {out_path}")
+    print(f"  [plot] generated_diversity {out_path}")

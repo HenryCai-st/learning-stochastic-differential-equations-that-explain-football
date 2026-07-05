@@ -316,6 +316,6 @@ class LorenzSDE:
             ts_fig.savefig(param_dir / "timeseries_overview.png",
                            dpi=150, bbox_inches="tight")
             plt.close(ts_fig)
-            print(f"  → saved to '{param_dir}'")
+            print(f"  saved to '{param_dir}'")
 
         print(f"[LorenzSDE] Sensitivity done. Output in '{out_dir}'")

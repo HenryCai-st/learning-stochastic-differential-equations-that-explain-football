@@ -62,12 +62,12 @@ class TrajectoryEncoder1D(nn.Module):
 
 class LorenzRegimeClassifier(nn.Module):
     """
-    Binary classifier: fixed-point (label=0) vs. chaotic (label=1) regime.
+    Multi-class classifier for the three rho regimes: fixed-point, curve, and chaotic/repulsor.
 
     Loss: CrossEntropyLoss
     """
 
-    def __init__(self, in_channels: int = 2, hidden_dim: int = 128, num_classes: int = 2):
+    def __init__(self, in_channels: int = 2, hidden_dim: int = 128, num_classes: int = 3):
         super().__init__()
         self.encoder = TrajectoryEncoder1D(in_channels, hidden_dim)
         self.head    = nn.Sequential(
@@ -208,11 +208,11 @@ class ContrastiveRatioNet(nn.Module):
         )
 
     def encode_trajectory(self, trajectory: torch.Tensor) -> torch.Tensor:
-        """(B, 2, T) → (B, H)"""
+        """(B, 2, T)  (B, H)"""
         return self.trajectory_encoder(trajectory)
 
     def encode_params(self, params: torch.Tensor) -> torch.Tensor:
-        """(B, param_dim) → (B, H)"""
+        """(B, param_dim)  (B, H)"""
         return self.param_encoder(params)
 
     def forward(self, trajectory: torch.Tensor, params: torch.Tensor) -> torch.Tensor:

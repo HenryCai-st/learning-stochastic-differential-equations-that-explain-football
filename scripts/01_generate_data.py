@@ -4,11 +4,11 @@ scripts/01_generate_data.py
 Part 1 of 4 — Data Generation
 
 Generates the Lorenz SDE dataset and saves:
-  • lorenz_dataset.npz                  — dataset file
+  • data.npz                            — dataset file
   • outputs/generated_diversity.png     — diversity visualisation
 
 Usage:
-    python scripts/01_generate_data.py [--n-samples 1000] [--seed 42] [--out lorenz_dataset.npz]
+    python scripts/01_generate_data.py [--n-samples 1000] [--seed 42] [--out data.npz]
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from src.utils.plotting import plot_generated_diversity
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate Lorenz SDE dataset.")
-    parser.add_argument("--n-samples", type=int,   default=1000,
+    parser.add_argument("--n-samples", type=int,   default=500,
                         help="Number of samples to attempt (some may be discarded)")
     parser.add_argument("--T",         type=float, default=50.0,
                         help="Simulation time per trajectory")
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cut",       type=int,   default=1000,
                         help="Transient steps to discard after simulation")
     parser.add_argument("--seed",      type=int,   default=42)
-    parser.add_argument("--out",       default=str(ROOT / "lorenz_dataset.npz"),
+    parser.add_argument("--out",       default=str(ROOT / "data" / "data.npz"),
                         help="Output path for the .npz dataset")
     parser.add_argument("--out-dir",   default=str(ROOT / "outputs"),
                         help="Directory for visualisation outputs")
@@ -57,13 +57,21 @@ def sample_params(rng: np.random.Generator) -> tuple:
 
     σ ~ Uniform(1, 20)
     β ~ Uniform(0.5, 5)
-    ρ ~ 50% from [0.5, 1.0]  (fixed-point)
-        50% from [25.0, 50.0] (chaotic)
+    ρ ~ stratified over three regimes:
+        Regime 1: fixed points / decay          [0.5, 15.0]
+        Regime 2: curve / limit cycles         [15.0, 24.0]
+        Regime 3: chaos / repulsor             [24.0, 50.0]
     ε ~ Uniform(0.0, 1.5)
     """
     sigma   = rng.uniform(1.0, 20.0)
     beta    = rng.uniform(0.5,  5.0)
-    rho     = rng.uniform(0.5, 1.0) if rng.random() < 0.5 else rng.uniform(25.0, 50.0)
+    regime  = rng.integers(0, 3)
+    if regime == 0:
+        rho = rng.uniform(0.5, 15.0)
+    elif regime == 1:
+        rho = rng.uniform(15.0, 24.0)
+    else:
+        rho = rng.uniform(24.0, 50.0)
     epsilon = rng.uniform(0.0, 1.5)
     return sigma, rho, beta, epsilon
 
@@ -87,13 +95,13 @@ def simulate_lorenz(
     return x, y, z
 
 
-def label_from_rho(rho: float) -> int | None:
-    """Return 0 (fixed-point) / 1 (chaos) / None (ambiguous, discard)."""
-    if rho < 1.0:
+def label_from_rho(rho: float) -> int:
+    """Return 0 (fixed-point), 1 (curve), or 2 (chaotic/repulsor)."""
+    if rho <= 15.0:
         return 0
-    if rho > 24.7:
+    if rho <= 24.0:
         return 1
-    return None
+    return 2
 
 
 def normalize_traj(traj: np.ndarray) -> np.ndarray:
@@ -114,13 +122,11 @@ def main() -> None:
     rng_master = np.random.default_rng(args.seed)
     dataset: list[dict] = []
 
-    print(f"[01_generate_data] Generating up to {args.n_samples} samples …")
+    print(f"[01_generate_data] Generating up to {args.n_samples} samples")
 
     for i in range(args.n_samples):
         sigma, rho, beta, epsilon = sample_params(rng_master)
         label = label_from_rho(rho)
-        if label is None:
-            continue
 
         # Each trajectory gets its own child RNG for reproducibility
         child_seed = int(rng_master.integers(0, 2**31))
@@ -142,7 +148,8 @@ def main() -> None:
 
     print(f"[01_generate_data] Kept {len(dataset)} labelled samples "
           f"(fixed-point: {sum(1 for d in dataset if d['label']==0)}, "
-          f"chaos: {sum(1 for d in dataset if d['label']==1)})")
+          f"curve: {sum(1 for d in dataset if d['label']==1)}, "
+          f"chaotic/repulsor: {sum(1 for d in dataset if d['label']==2)})")
 
     # ── Save dataset ──────────────────────────────────────────────────────────
     npz_path = Path(args.out)
@@ -152,7 +159,7 @@ def main() -> None:
         params=np.array([d["params"] for d in dataset]),
         labels=np.array([d["label"]  for d in dataset]),
     )
-    print(f"[01_generate_data] Dataset saved → {npz_path}")
+    print(f"[01_generate_data] Dataset saved {npz_path}")
 
     # ── Diversity visualisation ───────────────────────────────────────────────
     plot_generated_diversity(dataset, out_dir / "generated_diversity.png")
