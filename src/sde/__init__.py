@@ -1,16 +1,10 @@
-"""SDE simulators for the stochastic Lorenz system."""
-from src.sde.lorenz_sde import (
-    LorenzSDE,
-    simulate_lorenz_np,
-    PARAM_NAMES,
-    PARAM_BOUNDS,
-    PRIOR_BOUNDS_ARRAY,
-)
+"""SDE simulator modules.
 
-__all__ = [
-    "LorenzSDE",
-    "simulate_lorenz_np",
-    "PARAM_NAMES",
-    "PARAM_BOUNDS",
-    "PRIOR_BOUNDS_ARRAY",
-]
+Keep this package initializer light. Import concrete simulators from their
+modules, for example:
+
+    from src.sde.football_ou import simulate_position_ou_batch
+    from src.sde.lorenz_sde import LorenzSDE
+"""
+
+__all__ = []

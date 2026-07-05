@@ -4,3 +4,5 @@ torchvision
 torchsde
 numpy
 matplotlib
+pandas
+plotly
