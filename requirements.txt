@@ -1,1 +1,6 @@
 # requirements.txt
+torch
+torchvision
+torchsde
+numpy
+matplotlib

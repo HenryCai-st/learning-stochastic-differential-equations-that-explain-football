@@ -1,5 +1,10 @@
 # Deep Learning Project
 
+## Branch description
+
+This branch uses [lorenz system](https://en.wikipedia.org/wiki/Lorenz_system) for simulating the SDE. A template script can be found in subfolder `scripts` to generate and plot.
+Planned steps described in `documentation.md`. `lorenz_sde_design__notes.md` gives thoughts about it.
+
 ## Project description
 
 We are to achieve "trajectories to parameters", the inverse design of simulating differential equation using parameters based on "Learning Stochastic Differential Equations that Explain Football".
@@ -60,3 +65,17 @@ Model the whole piepline of project. e.g.:
    ```bash
    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
    ```
+
+## SDE Generation Instructions
+
+1. **Running batch generation**
+   ```
+   python scripts/run_lorenz.py
+   ```
+
+   3 modes to choose via `--mode`:
+   - grid: runs over all permutations of parameter sets
+   - sensitivity: given base params, only change one parameter at a time
+   - both
+
+   The parameters are configured inside run_lorenz.py
