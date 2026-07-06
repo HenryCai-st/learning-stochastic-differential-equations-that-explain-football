@@ -63,8 +63,18 @@ def write_future_svg(out_path: Path, observed: np.ndarray, futures: list[np.ndar
     for f in futures:
         lines.append(f'<polyline points="{pts(f)}" fill="none" stroke="#2ca02c" stroke-width="1" opacity="0.28"/>')
     lines.append(f'<polyline points="{pts(observed)}" fill="none" stroke="#1f77b4" stroke-width="3"/>')
+    start_x = pad + observed[0, 0] / 105.0 * (width - 2 * pad)
+    start_y = height - pad - observed[0, 1] / 68.0 * (height - 2 * pad)
+    end_x = pad + observed[-1, 0] / 105.0 * (width - 2 * pad)
+    end_y = height - pad - observed[-1, 1] / 68.0 * (height - 2 * pad)
+    lines.append(f'<circle cx="{start_x:.1f}" cy="{start_y:.1f}" r="6" fill="#1f77b4" stroke="white" stroke-width="2"/>')
+    lines.append(f'<rect x="{end_x-6:.1f}" y="{end_y-6:.1f}" width="12" height="12" fill="#dc2626" stroke="white" stroke-width="2"/>')
+    lines.append(f'<text x="{start_x+9:.1f}" y="{start_y-9:.1f}" font-size="12" fill="#1f77b4" font-weight="bold">start</text>')
+    lines.append(f'<text x="{end_x+9:.1f}" y="{end_y-9:.1f}" font-size="12" fill="#dc2626" font-weight="bold">end</text>')
     lines.append('<text x="560" y="70" font-size="13" fill="#1f77b4">blue = real observed window</text>')
     lines.append('<text x="560" y="90" font-size="13" fill="#2ca02c">green = posterior predictive</text>')
+    lines.append('<text x="560" y="110" font-size="13" fill="#1f77b4">circle = start</text>')
+    lines.append('<text x="560" y="130" font-size="13" fill="#dc2626">square = end</text>')
     lines.append("</svg>")
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -284,6 +294,7 @@ def write_histogram_svg(
         lines.append(f'<line x1="{plot_x}" y1="{plot_y+plot_h}" x2="{plot_x+plot_w}" y2="{plot_y+plot_h}" stroke="#333"/>')
         lines.append(f'<line x1="{plot_x}" y1="{plot_y}" x2="{plot_x}" y2="{plot_y+plot_h}" stroke="#333"/>')
         lines.append(f'<text x="{x0+panel_w/2}" y="{height-16}" text-anchor="middle" font-size="13">{name}</text>')
+        lines.append(f'<text x="{plot_x-38}" y="{plot_y+plot_h/2}" text-anchor="middle" font-size="12" transform="rotate(-90 {plot_x-38} {plot_y+plot_h/2})">density</text>')
         lines.append(f'<text x="{x0+panel_w/2}" y="50" text-anchor="middle" font-size="15">Prior vs posterior: {name}</text>')
 
         bar_w = plot_w / bins
@@ -294,6 +305,18 @@ def write_histogram_svg(
             qh = post_counts[i] / ymax * plot_h
             lines.append(f'<rect x="{px:.2f}" y="{plot_y+plot_h-ph:.2f}" width="{bar_w:.2f}" height="{ph:.2f}" fill="{prior_color}" opacity="0.38"/>')
             lines.append(f'<rect x="{px:.2f}" y="{plot_y+plot_h-qh:.2f}" width="{bar_w:.2f}" height="{qh:.2f}" fill="{post_color}" opacity="0.62"/>')
+
+        # Numeric x-axis ticks in physical parameter units.
+        for tick in np.linspace(lo, hi, 5):
+            tx = plot_x + (tick - lo) / max(hi - lo, 1e-8) * plot_w
+            lines.append(f'<line x1="{tx:.1f}" y1="{plot_y+plot_h:.1f}" x2="{tx:.1f}" y2="{plot_y+plot_h+5:.1f}" stroke="#333"/>')
+            lines.append(f'<text x="{tx:.1f}" y="{plot_y+plot_h+20:.1f}" text-anchor="middle" font-size="10">{tick:.2g}</text>')
+
+        # Numeric y-axis ticks in density units.
+        for tick in np.linspace(0.0, ymax, 4):
+            ty = plot_y + plot_h - tick / max(ymax, 1e-8) * plot_h
+            lines.append(f'<line x1="{plot_x-5:.1f}" y1="{ty:.1f}" x2="{plot_x:.1f}" y2="{ty:.1f}" stroke="#333"/>')
+            lines.append(f'<text x="{plot_x-8:.1f}" y="{ty+3:.1f}" text-anchor="end" font-size="10">{tick:.2g}</text>')
 
         lines.append(f'<text x="{plot_x+plot_w-130}" y="{plot_y+20}" font-size="12" fill="{prior_color}">prior</text>')
         lines.append(f'<text x="{plot_x+plot_w-130}" y="{plot_y+40}" font-size="12" fill="{post_color}">posterior</text>')

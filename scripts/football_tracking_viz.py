@@ -12,9 +12,9 @@ from src.utils.football_viz import visualize_tracking_frame
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Visualize football tracking data.")
-    parser.add_argument("--home", default="data/Sample_Game_2/Sample_Game_2_RawTrackingData_Home_Team.csv")
-    parser.add_argument("--away", default="data/Sample_Game_2/Sample_Game_2_RawTrackingData_Away_Team.csv")
-    parser.add_argument("--frame", type=int, default=500)
+    parser.add_argument("--home", default="data/Sample_Game_1/Sample_Game_1_RawTrackingData_Home_Team.csv")
+    parser.add_argument("--away", default="data/Sample_Game_1/Sample_Game_1_RawTrackingData_Away_Team.csv")
+    parser.add_argument("--frame", type=int, default=100)
     parser.add_argument("--t", type=int, default=25)
     parser.add_argument("--out", default="outputs/football_visualisation.png")
     args = parser.parse_args()

@@ -13,11 +13,11 @@ from src.data.football_tracking import extract_fixed_windows, entity_xy, load_tr
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extract fixed football trajectory windows for OU-SBI inference.")
-    parser.add_argument("--home", default="data/Sample_Game_2/Sample_Game_2_RawTrackingData_Home_Team.csv")
-    parser.add_argument("--away", default="data/Sample_Game_2/Sample_Game_2_RawTrackingData_Away_Team.csv")
+    parser.add_argument("--home", default="data/Sample_Game_1/Sample_Game_1_RawTrackingData_Home_Team.csv")
+    parser.add_argument("--away", default="data/Sample_Game_1/Sample_Game_1_RawTrackingData_Away_Team.csv")
     parser.add_argument("--team", choices=["home", "away"], default="home")
     parser.add_argument("--entity", default="Ball", help="Ball or PlayerN, for example Player7")
-    parser.add_argument("--T", type=float, default=10.0)
+    parser.add_argument("--T", type=float, default=2.0)
     parser.add_argument("--dt", type=float, default=0.05)
     parser.add_argument("--stride", type=int, default=25)
     parser.add_argument("--max-gap-fraction", type=float, default=0.05)

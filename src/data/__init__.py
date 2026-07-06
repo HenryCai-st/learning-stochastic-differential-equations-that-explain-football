@@ -1,16 +1,9 @@
-"""Dataset helpers: dataloader, parameter scaler, pair sampler."""
-from src.data.lorenz_dataset import (
-    ParamScaler,
-    LorenzTrajectoryDataset,
-    LorenzPairDataset,
-    make_subset,
-    PARAM_NAMES,
-)
+"""Data loading and preprocessing modules.
 
-__all__ = [
-    "ParamScaler",
-    "LorenzTrajectoryDataset",
-    "LorenzPairDataset",
-    "make_subset",
-    "PARAM_NAMES",
-]
+Import concrete classes from their modules, for example:
+
+    from src.data.model_voting_dataset import ModelVotingDataset
+    from src.data.football_tracking import load_tracking
+"""
+
+__all__ = []

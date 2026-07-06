@@ -1,5 +1,65 @@
 # Deep Learning Project
 
+## Current football SBI workflow
+
+The active project direction is model-voting simulation-based inference for
+football ball trajectories. The goal is to infer a distribution
+`p(model, theta | observed_track)` and then render a posterior predictive
+distribution over future ball positions.
+
+Main implementation task list:
+
+```text
+SBI_MODEL_VOTING_IMPLEMENTATION_TASKS.md
+```
+
+Current run order:
+
+```powershell
+python scripts\extract_football_windows.py `
+  --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
+  --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
+  --team home `
+  --entity Ball `
+  --T 5.0 `
+  --dt 0.04 `
+  --out data\real_football_windows.npz
+
+python scripts\generate_model_voting_data.py `
+  --real-windows data\real_football_windows.npz `
+  --n-per-model 1000 `
+  --T 5.0 `
+  --dt 0.04 `
+  --out-dir data\model_voting_dataset
+
+python scripts\plot_model_voting_dataset.py `
+  --dataset data\model_voting_dataset\dataset.npz `
+  --out-dir outputs\model_voting_dataset_viz
+
+python scripts\train_model_voting_ratio.py `
+  --data-dir data\model_voting_dataset `
+  --epochs 100 `
+  --batch-size 128 `
+  --out-dir checkpoints
+
+python scripts\recover_model_voting_posterior.py `
+  --real-windows data\real_football_windows.npz `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --window-index 0 `
+  --mcmc-steps 3000 `
+  --burn-in 800 `
+  --out-dir outputs\model_voting_posterior
+
+python scripts\evaluate_model_voting.py `
+  --posterior outputs\model_voting_posterior\posterior_chains.npz `
+  --n-paths 300 `
+  --out-dir outputs\model_voting_evaluation
+```
+
+The next refinement is the stricter prediction protocol: split each real window
+into observed prefix and future suffix, infer only from the prefix, then score
+the predictive distribution against the held-out future.
+
 ## Branch description
 
 This branch uses [lorenz system](https://en.wikipedia.org/wiki/Lorenz_system) for simulating the SDE. A template script can be found in subfolder `scripts` to generate and plot.
