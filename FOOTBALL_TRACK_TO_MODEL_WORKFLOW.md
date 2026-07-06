@@ -122,6 +122,38 @@ python scripts\extract_football_windows.py `
   --out data\real_football_windows.npz
 ```
 
+Here `--T` means duration of each extracted window. If you want to choose one
+specific window instead of scanning with `--stride`, provide either
+`--start-time` or `--start-frame`:
+
+```powershell
+python scripts\extract_football_windows.py `
+  --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
+  --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
+  --team home `
+  --entity Ball `
+  --period 1 `
+  --start-time 37.2 `
+  --T 5.0 `
+  --dt 0.04 `
+  --out data\real_football_windows.npz
+```
+
+This extracts the 5-second ball trajectory starting at the row closest to
+37.2 seconds in period 1. To select by exact frame instead:
+
+```powershell
+python scripts\extract_football_windows.py `
+  --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
+  --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
+  --team home `
+  --entity Ball `
+  --start-frame 12400 `
+  --T 5.0 `
+  --dt 0.04 `
+  --out data\real_football_windows.npz
+```
+
 Output:
 
 ```text
@@ -147,6 +179,22 @@ python scripts\football_tracking_viz.py `
 
 The reusable parsing functions live in `src/data/football_tracking.py`, so both
 the extractor and the visualizer use the same CSV interpretation.
+
+For a moving clip of one selected time window, use:
+
+```powershell
+python scripts\football_window_clip.py `
+  --game data\Sample_Game_1 `
+  --period 1 `
+  --start-time 37.2 `
+  --duration 5.0 `
+  --frame-step 2 `
+  --fps 12 `
+  --out outputs\football_window_clip.gif
+```
+
+Use `.gif` for the most portable output. Use `.mp4` only if ffmpeg is
+available in your Python environment.
 
 ### Step 2: Generate Synthetic OU Training Data
 
