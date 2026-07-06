@@ -20,11 +20,20 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, random_split
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+def find_project_root(start: Path) -> Path:
+    """Find repository root from this nested workflow script."""
+    for parent in [start, *start.parents]:
+        if (parent / "src").is_dir() and (parent / "scripts").is_dir():
+            return parent
+    raise RuntimeError("Could not locate project root containing src/ and scripts/.")
+
+
+PROJECT_ROOT = find_project_root(Path(__file__).resolve())
+sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from generate_data import PARAMETER_LOW, PARAMETER_HIGH, RHO_REGIME_BOUNDS, sample_parameters
-from train_ratio_classifier import RatioClassifier
+from scripts.Lorenz_workflow.generate_data import PARAMETER_LOW, PARAMETER_HIGH, RHO_REGIME_BOUNDS, sample_parameters
+from scripts.Lorenz_workflow.train_ratio_classifier import RatioClassifier
 from src.data.dataset import SDEDataset
 from src.models.encoder import TrajectoryEncoder
 

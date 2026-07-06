@@ -17,11 +17,20 @@ import numpy as np
 import torch
 import plotly.graph_objects as go
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+def find_project_root(start: Path) -> Path:
+    """Find repository root from this nested workflow script."""
+    for parent in [start, *start.parents]:
+        if (parent / "src").is_dir() and (parent / "scripts").is_dir():
+            return parent
+    raise RuntimeError("Could not locate project root containing src/ and scripts/.")
+
+
+PROJECT_ROOT = find_project_root(Path(__file__).resolve())
+sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from generate_data import sample_parameters, simulate_batch
-from recover_posterior import load_ratio_classifier, random_walk_metropolis_hastings
+from scripts.Lorenz_workflow.generate_data import sample_parameters, simulate_batch
+from scripts.Lorenz_workflow.recover_posterior import load_ratio_classifier, random_walk_metropolis_hastings
 from src.data.dataset import SDEDataset
 
 DISPLAY_NAMES = ["sigma", "rho", "beta", "noise"]
