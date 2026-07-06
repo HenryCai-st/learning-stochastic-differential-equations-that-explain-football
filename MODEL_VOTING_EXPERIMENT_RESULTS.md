@@ -427,3 +427,183 @@ It is reasonable to proceed to the next project step, but constant_velocity
 confusion should be kept in mind.
 ```
 
+## Follow-Up Experiments: Large Checkpoint And Prefix/Suffix Prediction
+
+These follow-up runs validate the larger checkpoint, check whether the
+`constant_velocity` confusion remains, test several real windows, and implement
+the prefix/suffix prediction protocol.
+
+### Large Synthetic Known-Model Recovery
+
+Command:
+
+```powershell
+D:\miniconda3\envs\dl\python.exe scripts\evaluate_model_voting_synthetic.py `
+  --data-dir data\model_voting_dataset `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --n-eval 400 `
+  --n-candidates 1024 `
+  --out-dir outputs\model_voting_synthetic_eval_large
+```
+
+Result:
+
+```json
+{
+  "top1_model_accuracy": 0.8875,
+  "top2_model_accuracy": 0.9825,
+  "mean_vote_weight_for_true_model": 0.8135455801907032,
+  "mean_entropy_of_model_votes": 0.31999856035022733,
+  "per_model_accuracy": {
+    "brownian": 0.9245283018867925,
+    "constant_velocity": 0.9444444444444444,
+    "ou_target": 0.8452380952380952,
+    "piecewise_velocity": 0.8235294117647058
+  }
+}
+```
+
+Status: pass. The large checkpoint is well above the 70% "good" threshold.
+
+### constant_velocity Confusion
+
+Confusion matrix from `outputs/model_voting_synthetic_eval_large`:
+
+```text
+true_by_pred,brownian,constant_velocity,ou_target,piecewise_velocity
+brownian,98,1,5,2
+constant_velocity,1,102,1,4
+ou_target,12,0,71,1
+piecewise_velocity,2,13,3,84
+```
+
+`constant_velocity` is no longer weak:
+
+```text
+total constant_velocity samples: 108
+wrong: 6
+accuracy: 94.44%
+wrong predictions:
+  piecewise_velocity: 4
+  ou_target: 1
+  brownian: 1
+```
+
+Conclusion: the earlier `constant_velocity` failure was mainly a small
+checkpoint issue. The remaining confusion is mostly with `piecewise_velocity`,
+which is expected because constant velocity is a special case of piecewise
+velocity.
+
+### Multiple Real Windows
+
+Windows evaluated:
+
+```text
+0, 50, 100, 200, 500
+```
+
+| window | winning model | main vote weights | endpoint median | endpoint p90 |
+|---:|---|---|---:|---:|
+| 0 | ou_target | ou_target 0.826, piecewise_velocity 0.168 | 2.67 m | 39.34 m |
+| 50 | constant_velocity | constant_velocity 0.841, ou_target 0.157 | 23.35 m | 41.20 m |
+| 100 | ou_target | ou_target 0.417, brownian 0.267, piecewise_velocity 0.214 | 20.59 m | 45.04 m |
+| 200 | piecewise_velocity | piecewise_velocity 0.935 | 35.26 m | 72.63 m |
+| 500 | piecewise_velocity | piecewise_velocity 0.638, ou_target 0.184, constant_velocity 0.172 | 26.46 m | 69.45 m |
+
+Status: partial. Different windows choose different models, so the posterior is
+not locked to one model. However, endpoint errors are often large, especially
+for windows 200 and 500.
+
+### Prefix/Suffix Prediction
+
+Implemented scripts:
+
+```text
+scripts/extract_prefix_suffix_windows.py
+scripts/recover_model_voting_prefix_posterior.py
+scripts/evaluate_prefix_suffix_prediction.py
+```
+
+Window split:
+
+```text
+full window: 5 seconds
+prefix: first 2 seconds = 50 steps
+suffix: next 3 seconds = 75 steps
+dt: 0.04
+```
+
+The prefix posterior script does not use the held-out suffix endpoint. Because
+the current trained model expects a target-like condition, it supports
+prefix-only target heuristics:
+
+```text
+average
+recent
+prefix_end
+```
+
+For the main baseline output, `prefix_end` was used because it was the best of
+the three no-leakage heuristics on window 0.
+
+Main output:
+
+```text
+outputs/prefix_suffix_posterior
+outputs/prefix_suffix_prediction
+```
+
+Result on window 0:
+
+```json
+{
+  "winning_model": "ou_target",
+  "model_vote_weights": {
+    "brownian": 0.0000023018585611747305,
+    "constant_velocity": 0.00000023740362597594198,
+    "ou_target": 0.9237816346572517,
+    "piecewise_velocity": 0.07621582608056114
+  },
+  "suffix_endpoint_error_m": {
+    "median": 22.69134521484375,
+    "p10": 20.62403106689453,
+    "p90": 35.05808639526367
+  },
+  "path_rmse_m": {
+    "median": 14.944526672363281,
+    "p10": 13.907381057739258,
+    "p90": 23.685897827148438
+  },
+  "coverage_rate": 0.04
+}
+```
+
+Target-strategy comparison on window 0:
+
+| target strategy | endpoint median | path RMSE median | coverage |
+|---|---:|---:|---:|
+| recent | 27.81 m | 24.39 m | 0.00 |
+| average | 39.17 m | 29.79 m | 0.00 |
+| prefix_end | 22.69 m | 14.94 m | 0.04 |
+
+Status: implemented, but not yet a good future predictor.
+
+### Follow-Up Decision
+
+Observed:
+
+```text
+large synthetic recovery: pass, top1 = 88.75%
+constant_velocity confusion: mostly resolved
+multi-window real posterior: model votes vary, endpoint errors often high
+prefix/suffix prediction: implemented, but endpoint error and coverage are poor
+```
+
+Decision:
+
+```text
+Do not add new SDE models yet.
+Pause on project-feature expansion and debug future-prediction conditioning.
+Recommended next debugging target: retrain model-voting with prefix-compatible
+conditioning, or remove/replace the full-window target condition for prediction.
+```

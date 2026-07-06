@@ -319,12 +319,12 @@ Render:
 Tasks:
 
 - [x] Add `scripts/evaluate_model_voting.py`.
-- [ ] Plot observed prefix and true future suffix separately.
+- [x] Plot observed prefix and true future suffix separately.
 - [x] Plot sampled future paths.
 - [x] Plot future endpoint density.
 - [x] Plot model posterior/vote bar chart.
 - [x] Plot parameter histograms for the winning model.
-- [ ] Report coverage metrics if a future suffix is held out.
+- [x] Report coverage metrics if a future suffix is held out.
 
 Implemented output:
 
@@ -356,10 +356,65 @@ future target = next 3 seconds
 
 Tasks:
 
-- [ ] Update real-window extraction to store prefix/suffix split.
-- [ ] Condition inference on prefix only.
-- [ ] Evaluate predictive distribution against suffix.
-- [ ] Do not leak endpoint unless the task is explicitly reconstruction.
+- [x] Update real-window extraction to store prefix/suffix split.
+- [x] Condition inference on prefix only.
+- [x] Evaluate predictive distribution against suffix.
+- [x] Do not leak endpoint unless the task is explicitly reconstruction.
+
+Implemented files:
+
+```text
+scripts/extract_prefix_suffix_windows.py
+scripts/recover_model_voting_prefix_posterior.py
+scripts/evaluate_prefix_suffix_prediction.py
+```
+
+Implemented data contract:
+
+```text
+data/real_football_prefix_suffix_windows.npz
+
+prefix_tracks          # first 2 seconds
+suffix_tracks          # held-out next 3 seconds
+full_tracks
+y0
+prefix_end
+suffix_end
+target_for_evaluation
+dt
+prefix_steps
+suffix_steps
+```
+
+Important implementation note:
+
+```text
+The current trained ratio model expects a target-like condition. For strict
+future prediction, the real suffix endpoint must not be used. The prefix
+posterior script therefore supports prefix-only target heuristics:
+
+average
+recent
+prefix_end
+```
+
+Current result:
+
+```text
+The protocol runs end-to-end, but the window-0 baseline is not yet a strong
+future predictor:
+
+suffix endpoint median error: 22.69 m
+path RMSE median: 14.94 m
+coverage rate: 0.04
+```
+
+Next debugging target:
+
+```text
+Retrain model-voting with prefix-compatible conditioning, or remove/replace the
+full-window target condition for prediction.
+```
 
 ## 10. Presentation Story
 

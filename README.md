@@ -56,9 +56,35 @@ python scripts\evaluate_model_voting.py `
   --out-dir outputs\model_voting_evaluation
 ```
 
-The next refinement is the stricter prediction protocol: split each real window
-into observed prefix and future suffix, infer only from the prefix, then score
-the predictive distribution against the held-out future.
+The stricter prediction protocol has a first baseline implementation: split
+each real window into observed prefix and held-out future suffix, infer only
+from the prefix, then score the predictive distribution against the held-out
+future.
+
+```powershell
+python scripts\extract_prefix_suffix_windows.py `
+  --input data\real_football_windows.npz `
+  --prefix-seconds 2.0 `
+  --out data\real_football_prefix_suffix_windows.npz
+
+python scripts\recover_model_voting_prefix_posterior.py `
+  --windows data\real_football_prefix_suffix_windows.npz `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --window-index 0 `
+  --target-strategy prefix_end `
+  --mcmc-steps 3000 `
+  --burn-in 800 `
+  --out-dir outputs\prefix_suffix_posterior
+
+python scripts\evaluate_prefix_suffix_prediction.py `
+  --posterior outputs\prefix_suffix_posterior\posterior_chains.npz `
+  --n-paths 300 `
+  --out-dir outputs\prefix_suffix_prediction
+```
+
+Current caveat: the prefix/suffix protocol runs, but the first baseline is not
+yet a good future predictor. The model was trained with full-window target
+conditioning, so prediction without the future endpoint needs more work.
 
 ## Branch description
 
