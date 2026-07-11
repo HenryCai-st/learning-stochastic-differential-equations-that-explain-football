@@ -56,6 +56,35 @@ python scripts\evaluate_model_voting.py `
   --out-dir outputs\model_voting_evaluation
 ```
 
+`--T` is the window duration. To extract one specific observed interval instead
+of scanning all possible windows, add either `--start-time` or `--start-frame`:
+
+```powershell
+python scripts\extract_football_windows.py `
+  --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
+  --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
+  --team home `
+  --entity Ball `
+  --period 1 `
+  --start-time 37.2 `
+  --T 5.0 `
+  --dt 0.04 `
+  --out data\real_football_windows.npz
+```
+
+To visually inspect the same kind of time window as a short clip:
+
+```powershell
+python scripts\football_window_clip.py `
+  --game data\Sample_Game_1 `
+  --period 1 `
+  --start-time 37.2 `
+  --duration 5.0 `
+  --frame-step 2 `
+  --fps 12 `
+  --out outputs\football_window_clip.gif
+```
+
 The stricter prediction protocol has a first baseline implementation: split
 each real window into observed prefix and held-out future suffix, infer only
 from the prefix, then score the predictive distribution against the held-out

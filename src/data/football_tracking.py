@@ -18,7 +18,7 @@ def load_tracking(path: str | Path, team: str) -> pd.DataFrame:
         Period, Frame, Time [s], Team,
         PlayerN_x, PlayerN_y, ..., Ball_x, Ball_y
     """
-    raw = pd.read_csv(path, header=None)
+    raw = pd.read_csv(path, header=None, low_memory=False)
     header_row = raw.iloc[2].tolist()
 
     col_names: list[str] = []
@@ -119,3 +119,92 @@ def extract_fixed_windows(
         np.asarray(meta, dtype=object),
     )
 
+
+def extract_single_window(
+    xy: np.ndarray,
+    frames: np.ndarray,
+    times: np.ndarray,
+    period: np.ndarray,
+    steps: int,
+    start_index: int,
+    max_gap_fraction: float = 0.05,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+    """
+    Extract one fixed window from a chosen row index.
+
+    This is used when the user wants a specific observed interval, for example
+    "start at 37.2 seconds for a 5 second window" instead of scanning all
+    possible windows.
+    """
+    if start_index < 0 or start_index + steps > len(xy):
+        raise ValueError(
+            f"Chosen start index {start_index} cannot provide {steps} steps "
+            f"from trajectory length {len(xy)}."
+        )
+
+    window = xy[start_index:start_index + steps].copy()
+    invalid = np.isnan(window).any(axis=1)
+    if invalid.mean() > max_gap_fraction:
+        raise ValueError(
+            "Chosen window has too many missing positions. "
+            "Try another start time/frame or increase --max-gap-fraction."
+        )
+
+    if invalid.any():
+        valid_idx = np.where(~invalid)[0]
+        if len(valid_idx) < 2:
+            raise ValueError("Chosen window has fewer than two valid positions.")
+        for dim in range(2):
+            window[invalid, dim] = np.interp(
+                np.where(invalid)[0],
+                valid_idx,
+                window[valid_idx, dim],
+            )
+
+    meta = {
+        "start_row": int(start_index),
+        "start_frame": int(frames[start_index]),
+        "end_frame": int(frames[start_index + steps - 1]),
+        "start_time_s": float(times[start_index]),
+        "end_time_s": float(times[start_index + steps - 1]),
+        "period": int(period[start_index]),
+    }
+    return (
+        window[None].astype(np.float32),
+        window[None, 0].astype(np.float32),
+        window[None, -1].astype(np.float32),
+        meta,
+    )
+
+
+def find_start_index(
+    frames: np.ndarray,
+    times: np.ndarray,
+    period: np.ndarray,
+    start_time: float | None = None,
+    start_frame: int | None = None,
+    chosen_period: int | None = None,
+) -> int:
+    """
+    Locate the row index closest to a requested start time or exact frame.
+
+    If period is provided, the search is restricted to that match period.
+    """
+    mask = np.ones(len(frames), dtype=bool)
+    if chosen_period is not None:
+        mask &= period == chosen_period
+    candidate_idx = np.where(mask)[0]
+    if len(candidate_idx) == 0:
+        raise ValueError(f"No rows found for period={chosen_period}.")
+
+    if start_frame is not None:
+        frame_matches = candidate_idx[frames[candidate_idx] == start_frame]
+        if len(frame_matches) == 0:
+            raise ValueError(f"Frame {start_frame} not found for the selected period.")
+        return int(frame_matches[0])
+
+    if start_time is not None:
+        local_times = times[candidate_idx]
+        return int(candidate_idx[np.argmin(np.abs(local_times - start_time))])
+
+    raise ValueError("Provide either start_time or start_frame.")
