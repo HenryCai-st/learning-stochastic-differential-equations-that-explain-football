@@ -1,3 +1,30 @@
+"""
+Candidate SDE simulators for the football model-voting SBI workflow.
+
+All models describe the 2D ball position X_t = (x_t, y_t) on the pitch and are
+simulated with an Euler-Maruyama update. The model-voting posterior estimates
+both a discrete model family and a continuous parameter vector theta:
+
+    brownian:
+        dX_t = sigma dW_t
+        theta = (sigma)
+
+    constant_velocity:
+        dX_t = v dt + sigma dW_t
+        theta = (vx, vy, sigma)
+
+    ou_target:
+        dX_t = k(target - X_t) dt + sigma dW_t
+        theta = (k, sigma)
+
+    piecewise_velocity:
+        dX_t = v_j dt + sigma dW_t, where j changes at two change points
+        theta = (vx1, vy1, vx2, vy2, vx3, vy3, sigma)
+
+Here dW_t is a 2D Brownian motion increment, approximated in code by
+sqrt(dt) * Normal(0, I).
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +39,15 @@ MODEL_TO_ID = {name: i for i, name in enumerate(MODEL_NAMES)}
 MAX_PARAM_DIM = 7
 CONDITION_DIM = 8
 MAX_SEGMENTS = 3
+VELOCITY_PRIOR_ABS = 30.0
+
+
+MODEL_PARAMETER_NAMES = {
+    "brownian": ("sigma",),
+    "constant_velocity": ("vx", "vy", "sigma"),
+    "ou_target": ("k", "sigma"),
+    "piecewise_velocity": ("vx1", "vy1", "vx2", "vy2", "vx3", "vy3", "sigma"),
+}
 
 
 @dataclass(frozen=True)
@@ -23,6 +59,11 @@ class ModelSpec:
     log_scale: np.ndarray
 
 
+# Parameter bounds define the prior support used by the simulator and MCMC
+# proposal normalization. Velocity units are pitch metres per second. The
+# velocity bound is deliberately robust rather than maximal: Sample_Game ball
+# speeds are mostly below 23 m/s at the 99th percentile, while the selected demo
+# window reaches roughly 29 m/s before tracking-jump outliers.
 MODEL_SPECS = {
     "brownian": ModelSpec(
         name="brownian",
@@ -34,8 +75,8 @@ MODEL_SPECS = {
     "constant_velocity": ModelSpec(
         name="constant_velocity",
         param_dim=3,
-        low=np.array([-35.0, -35.0, 0.05], dtype=np.float32),
-        high=np.array([35.0, 35.0, 4.0], dtype=np.float32),
+        low=np.array([-VELOCITY_PRIOR_ABS, -VELOCITY_PRIOR_ABS, 0.05], dtype=np.float32),
+        high=np.array([VELOCITY_PRIOR_ABS, VELOCITY_PRIOR_ABS, 4.0], dtype=np.float32),
         log_scale=np.array([False, False, True]),
     ),
     "ou_target": ModelSpec(
@@ -48,8 +89,30 @@ MODEL_SPECS = {
     "piecewise_velocity": ModelSpec(
         name="piecewise_velocity",
         param_dim=7,
-        low=np.array([-35.0, -35.0, -35.0, -35.0, -35.0, -35.0, 0.05], dtype=np.float32),
-        high=np.array([35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 4.0], dtype=np.float32),
+        low=np.array(
+            [
+                -VELOCITY_PRIOR_ABS,
+                -VELOCITY_PRIOR_ABS,
+                -VELOCITY_PRIOR_ABS,
+                -VELOCITY_PRIOR_ABS,
+                -VELOCITY_PRIOR_ABS,
+                -VELOCITY_PRIOR_ABS,
+                0.05,
+            ],
+            dtype=np.float32,
+        ),
+        high=np.array(
+            [
+                VELOCITY_PRIOR_ABS,
+                VELOCITY_PRIOR_ABS,
+                VELOCITY_PRIOR_ABS,
+                VELOCITY_PRIOR_ABS,
+                VELOCITY_PRIOR_ABS,
+                VELOCITY_PRIOR_ABS,
+                4.0,
+            ],
+            dtype=np.float32,
+        ),
         log_scale=np.array([False, False, False, False, False, False, True]),
     ),
 }
@@ -73,6 +136,7 @@ def pitch_normalize_condition(y0: np.ndarray, target: np.ndarray, change_points:
 
 
 def sample_model_parameters(model_name: str, n: int, rng: np.random.Generator) -> np.ndarray:
+    """Sample theta from the prior support of one candidate model family."""
     spec = MODEL_SPECS[model_name]
     params = np.zeros((n, spec.param_dim), dtype=np.float32)
     for i in range(spec.param_dim):
@@ -84,6 +148,7 @@ def sample_model_parameters(model_name: str, n: int, rng: np.random.Generator) -
 
 
 def pad_parameters(model_name: str, params: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Pad a variable-length theta vector to the shared classifier input size."""
     spec = MODEL_SPECS[model_name]
     params = np.asarray(params, dtype=np.float32)
     padded = np.zeros((len(params), MAX_PARAM_DIM), dtype=np.float32)
@@ -94,6 +159,7 @@ def pad_parameters(model_name: str, params: np.ndarray) -> tuple[np.ndarray, np.
 
 
 def normalize_padded_parameters(model_name: str, padded_params: np.ndarray) -> np.ndarray:
+    """Map active theta dimensions to roughly [-1, 1] for neural input features."""
     spec = MODEL_SPECS[model_name]
     out = np.zeros_like(padded_params, dtype=np.float32)
     for i in range(spec.param_dim):
@@ -119,6 +185,7 @@ def simulate_model_batch(
     rng: np.random.Generator,
     clip_to_pitch: bool = True,
 ) -> np.ndarray:
+    """Dispatch to the simulator associated with a sampled model family."""
     if model_name == "brownian":
         return simulate_brownian(params, y0, steps, dt, rng, clip_to_pitch)
     if model_name == "constant_velocity":
@@ -131,12 +198,23 @@ def simulate_model_batch(
 
 
 def _clip_pitch(current: np.ndarray) -> np.ndarray:
+    """Keep simulated positions inside the pitch rectangle."""
     current[:, 0] = np.clip(current[:, 0], 0.0, PITCH_LENGTH)
     current[:, 1] = np.clip(current[:, 1], 0.0, PITCH_WIDTH)
     return current
 
 
 def simulate_brownian(params, y0, steps, dt, rng, clip_to_pitch=True):
+    """
+    Simulate the Brownian random-walk baseline.
+
+    Math form:
+        dX_t = sigma dW_t
+        X_{t+dt} = X_t + sigma * sqrt(dt) * eps_t
+
+    Parameter order:
+        params[:, 0] = sigma
+    """
     n = len(params)
     tracks = np.zeros((n, steps, 2), dtype=np.float32)
     tracks[:, 0] = y0
@@ -152,6 +230,16 @@ def simulate_brownian(params, y0, steps, dt, rng, clip_to_pitch=True):
 
 
 def simulate_constant_velocity(params, y0, steps, dt, rng, clip_to_pitch=True):
+    """
+    Simulate a constant-velocity SDE.
+
+    Math form:
+        dX_t = v dt + sigma dW_t
+        X_{t+dt} = X_t + v * dt + sigma * sqrt(dt) * eps_t
+
+    Parameter order:
+        params[:, 0] = vx, params[:, 1] = vy, params[:, 2] = sigma
+    """
     n = len(params)
     tracks = np.zeros((n, steps, 2), dtype=np.float32)
     tracks[:, 0] = y0
@@ -168,6 +256,23 @@ def simulate_constant_velocity(params, y0, steps, dt, rng, clip_to_pitch=True):
 
 
 def simulate_piecewise_velocity(params, y0, change_points, steps, dt, rng, clip_to_pitch=True):
+    """
+    Simulate a three-segment piecewise constant-velocity SDE.
+
+    Math form:
+        dX_t = v_j dt + sigma dW_t
+        X_{t+dt} = X_t + v_j * dt + sigma * sqrt(dt) * eps_t
+
+    The segment index j is selected from the two supplied change points. This
+    model is intended to represent straight ball movement with abrupt direction
+    changes.
+
+    Parameter order:
+        params[:, 0:2] = (vx1, vy1)
+        params[:, 2:4] = (vx2, vy2)
+        params[:, 4:6] = (vx3, vy3)
+        params[:, 6] = sigma
+    """
     n = len(params)
     tracks = np.zeros((n, steps, 2), dtype=np.float32)
     tracks[:, 0] = y0

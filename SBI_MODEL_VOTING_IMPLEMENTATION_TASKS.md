@@ -40,7 +40,10 @@ python scripts\extract_football_windows.py `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
   --entity Ball `
+  --period 1 `
+  --start-time 37.2 `
   --T 5.0 `
+  --prefix-T 2.0 `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
@@ -73,13 +76,66 @@ python scripts\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
+
+python scripts\football_model_voting_clip.py `
+  --game data\Sample_Game_1 `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --period 1 `
+  --start-time 37.2 `
+  --duration 5.0 `
+  --trail-seconds 2.0 `
+  --score-window-seconds 2.0 `
+  --out outputs\football_model_voting_clip.gif
 ```
 
-The next unfinished stage is:
+In the extraction command, `--T` is the window duration and `--start-time`
+chooses where that observed window begins. The example above extracts a
+5-second window starting closest to 37.2 seconds in period 1. `--prefix-T 2.0`
+saves the first 2 seconds as `prefix_tracks` and the remaining 3 seconds as
+`suffix_tracks`. Posterior recovery uses the prefix only, and evaluation scores
+posterior predictive samples against the held-out suffix. Use `--start-frame`
+instead for an exact tracking frame. If neither option is provided, the
+extractor falls back to scan mode and creates many windows using `--stride`.
 
-```text
-prefix/suffix prediction protocol -> infer from prefix only -> score true future suffix
+When `data\real_football_windows.npz` contains `prefix_tracks`, the synthetic
+model-voting generator automatically uses that prefix length for training. With
+the command above, the classifier therefore trains on 2-second observed
+prefixes, while the 3-second suffix is kept only for posterior predictive
+evaluation.
+
+Optional segment diagnostic plot:
+
+```powershell
+python scripts\plot_real_window_segments.py `
+  --real-windows data\real_football_windows.npz `
+  --window-index 0 `
+  --out outputs\real_window_segments.png
 ```
+
+Optional real-data visual inspection:
+
+```powershell
+python scripts\football_window_clip.py `
+  --game data\Sample_Game_1 `
+  --period 1 `
+  --start-time 37.2 `
+  --duration 5.0 `
+  --frame-step 2 `
+  --fps 12 `
+  --trail-seconds 2.0 `
+  --out outputs\football_window_clip.gif
+```
+
+This clip tool is not part of ratio training or MCMC inference. Its role is to
+inspect whether the chosen observed time window contains the kind of ball motion
+we want the model-voting SBI demo to explain. `--trail-seconds 2.0` keeps only
+the most recent two seconds of ball trajectory visible as a sliding trail.
+
+The model-voting clip uses the trained ratio classifier and a sliding recent
+trajectory window. For each scored frame, it samples candidate parameters for
+each SDE family, scores them with the learned classifier, and displays a live
+soft vote over Brownian, constant-velocity, OU-target, and piecewise-velocity
+models beside the pitch.
 
 ## 2. Candidate Models For Model Voting
 
@@ -102,7 +158,7 @@ Recommended model set:
    - parameters: `vx, vy, noise_scale`
 
 3. OU-to-target
-   - current Phase A model
+   - single-model OU-to-target baseline
    - parameters: `k, noise_scale`
 
 4. Piecewise constant velocity SDE
@@ -148,7 +204,7 @@ Tasks:
 - [x] Implement speed and acceleration.
 - [x] Implement heading and turn-angle features.
 - [x] Smooth positions lightly before differencing if tracking noise is large.
-- [ ] Add diagnostics for extreme jumps and missing values.
+- [x] Add diagnostics for extreme jumps and missing values.
 
 ## 4. Piecewise Segmentation
 
@@ -171,8 +227,8 @@ Tasks:
 - [x] Implement angle-threshold segmentation.
 - [x] Implement minimum segment length.
 - [x] Implement fixed-K segmentation fallback.
-- [ ] Plot observed track with detected change points.
-- [ ] Save segment metadata into real-window `.npz`.
+- [x] Plot observed track with detected change points.
+- [x] Save segment metadata into real-window `.npz`.
 
 ## 5. Synthetic Data Generation
 
@@ -251,7 +307,7 @@ Tasks:
 - [x] Add model one-hot or model embedding.
 - [x] Keep y0/target/segment conditions attached to the track.
 - [x] Train with balanced matched/mismatched pairs.
-- [ ] Track validation accuracy and log-ratio gap per model.
+- [x] Track validation accuracy and log-ratio gap per model.
 
 Implemented files:
 
@@ -319,12 +375,12 @@ Render:
 Tasks:
 
 - [x] Add `scripts/evaluate_model_voting.py`.
-- [ ] Plot observed prefix and true future suffix separately.
+- [x] Plot observed prefix and true future suffix separately.
 - [x] Plot sampled future paths.
 - [x] Plot future endpoint density.
 - [x] Plot model posterior/vote bar chart.
 - [x] Plot parameter histograms for the winning model.
-- [ ] Report coverage metrics if a future suffix is held out.
+- [x] Report coverage metrics if a future suffix is held out.
 
 Implemented output:
 
@@ -356,17 +412,17 @@ future target = next 3 seconds
 
 Tasks:
 
-- [ ] Update real-window extraction to store prefix/suffix split.
-- [ ] Condition inference on prefix only.
-- [ ] Evaluate predictive distribution against suffix.
-- [ ] Do not leak endpoint unless the task is explicitly reconstruction.
+- [x] Update real-window extraction to store prefix/suffix split.
+- [x] Condition inference on prefix only.
+- [x] Evaluate predictive distribution against suffix.
+- [x] Do not leak endpoint unless the task is explicitly reconstruction.
 
 ## 10. Presentation Story
 
 Use the current OU failure as motivation:
 
 ```text
-The single OU model validated the SBI pipeline but failed on real ball tracks
+The single-model OU baseline validated the SBI pipeline but failed on real ball tracks
 because ball motion is piecewise and event-driven.
 We therefore extend to model voting: several SDE hypotheses compete under a
 contrastive ratio estimator, and MCMC samples the posterior over model and
@@ -376,9 +432,43 @@ The final output is a distribution over future positions, not one track.
 
 Minimum final demo:
 
-- [ ] Show raw observed ball window.
-- [ ] Show OU failure.
-- [ ] Show detected piecewise segments.
-- [ ] Show model vote distribution.
-- [ ] Show winning model parameter posterior.
-- [ ] Show posterior predictive future-density plot.
+- [x] Show raw observed ball window.
+- [x] Show OU failure.
+- [x] Show detected piecewise segments.
+- [x] Show model vote distribution.
+- [x] Show winning model parameter posterior.
+- [x] Show posterior predictive future-density plot.
+
+Presentation artifact commands:
+
+```powershell
+# Raw observed ball movement clip.
+python scripts\football_window_clip.py `
+  --game data\Sample_Game_1 `
+  --period 1 `
+  --start-time 37.2 `
+  --duration 5.0 `
+  --trail-seconds 2.0 `
+  --out outputs\football_window_clip.gif
+
+# Detected piecewise segment figure.
+python scripts\plot_real_window_segments.py `
+  --real-windows data\real_football_windows.npz `
+  --window-index 0 `
+  --out outputs\real_window_segments.png
+
+# OU failure figure from the older single-model workflow.
+python scripts\score_real_football_window.py `
+  --real-windows data\real_football_windows.npz `
+  --checkpoint checkpoints\football_ou_ratio_best.pt `
+  --window-index 0 `
+  --out-dir outputs\football_ou_real
+
+# Model-voting posterior figures:
+# model_vote_weights.png, winning_model_parameter_histograms.png,
+# endpoint_density.png, posterior_predictive_paths.png.
+python scripts\evaluate_model_voting.py `
+  --posterior outputs\model_voting_posterior\posterior_chains.npz `
+  --n-paths 300 `
+  --out-dir outputs\model_voting_evaluation
+```

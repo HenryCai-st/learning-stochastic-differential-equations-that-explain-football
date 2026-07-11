@@ -10,7 +10,7 @@ from src.sde.football_ou import PARAMETER_HIGH, PARAMETER_LOW, pitch_normalize_x
 
 
 class OUParameterNormalizer:
-    """Normalize Phase A OU parameters to [-1, 1]."""
+    """Normalize football OU baseline parameters to [-1, 1]."""
 
     def __init__(self, low: np.ndarray = PARAMETER_LOW, high: np.ndarray = PARAMETER_HIGH):
         self.low = np.asarray(low, dtype=np.float32)

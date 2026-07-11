@@ -1,3 +1,20 @@
+"""
+Create a short animated GIF/MP4 from football tracking data.
+
+Inputs:
+    - a Sample_Game_x folder
+    - a period plus start time/frame and duration
+    - rendering controls such as frame step, FPS, and trail length
+
+Outputs:
+    - a GIF or MP4 showing the pitch, both teams, the ball, and a sliding ball
+      trajectory trail.
+
+Expected use:
+    Use this raw-data clip to visually inspect the real time window before
+    running SBI extraction, model voting, or posterior evaluation.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -19,6 +36,7 @@ from src.utils.football_viz import BALL_COLOUR, TEAM_COLOURS, TRAJ_COLOUR, pitch
 
 
 def resolve_game_dir(game: str | Path) -> Path:
+    """Resolve a game folder from either an explicit path or a data/ child name."""
     path = Path(game)
     if path.is_dir():
         return path
@@ -29,6 +47,7 @@ def resolve_game_dir(game: str | Path) -> Path:
 
 
 def tracking_paths(game_dir: Path) -> tuple[Path, Path]:
+    """Return expected home and away tracking CSV paths for a Sample_Game folder."""
     game_name = game_dir.name
     home = game_dir / f"{game_name}_RawTrackingData_Home_Team.csv"
     away = game_dir / f"{game_name}_RawTrackingData_Away_Team.csv"
@@ -41,11 +60,13 @@ def tracking_paths(game_dir: Path) -> tuple[Path, Path]:
 
 
 def player_columns(df: pd.DataFrame) -> list[tuple[str, str]]:
+    """List `(x_column, y_column)` pairs for player coordinates."""
     xcols = [c for c in df.columns if c.endswith("_x") and not c.startswith("Ball")]
     return [(xcol, xcol.replace("_x", "_y")) for xcol in xcols]
 
 
 def player_offsets(row: pd.Series, columns: list[tuple[str, str]]) -> np.ndarray:
+    """Convert one tracking row's player positions into pitch-metre offsets."""
     points = []
     for xcol, ycol in columns:
         px, py = row.get(xcol, np.nan), row.get(ycol, np.nan)
@@ -59,6 +80,7 @@ def player_offsets(row: pd.Series, columns: list[tuple[str, str]]) -> np.ndarray
 
 
 def ball_xy(row_home: pd.Series, row_away: pd.Series) -> tuple[float, float] | None:
+    """Return the ball position in pitch metres for one frame, if available."""
     row = row_home if "Ball_x" in row_home.index else row_away
     bx, by = row.get("Ball_x", np.nan), row.get("Ball_y", np.nan)
     if pd.isna(bx) or pd.isna(by):
@@ -75,6 +97,7 @@ def select_indices(
     duration: float,
     frame_step: int,
 ) -> np.ndarray:
+    """Select rendered row indices for the requested period/time/frame window."""
     frames = df["Frame"].to_numpy()
     times = df["Time [s]"].to_numpy()
     periods = df["Period"].to_numpy()
@@ -95,6 +118,7 @@ def select_indices(
 
 
 def save_animation(anim: FuncAnimation, out_path: Path, fps: int, dpi: int) -> None:
+    """Save a Matplotlib animation as GIF via Pillow or MP4 via ffmpeg."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     suffix = out_path.suffix.lower()
     if suffix == ".gif":
@@ -114,6 +138,7 @@ def make_clip(
     dpi: int,
     trail_seconds: float | None,
 ) -> None:
+    """Build and save the animated raw tracking clip."""
     home_cols = player_columns(df_home)
     away_cols = player_columns(df_away)
     first_home = df_home.iloc[int(indices[0])]
@@ -171,6 +196,7 @@ def make_clip(
     start_frame = int(first_home["Frame"])
 
     def update(frame_i: int):
+        """Update player markers, ball marker, sliding trail, and time label."""
         idx = int(indices[frame_i])
         row_home = df_home.iloc[idx]
         row_away = df_away.iloc[idx]
@@ -216,6 +242,7 @@ def make_clip(
 
 
 def main() -> None:
+    """Parse CLI options, load tracking data, choose frames, and render a clip."""
     parser = argparse.ArgumentParser(description="Create a short football tracking clip for a selected time window.")
     parser.add_argument("--game", default="data/Sample_Game_1", help="Sample game folder or name, e.g. data/Sample_Game_1")
     parser.add_argument("--period", type=int, default=1)

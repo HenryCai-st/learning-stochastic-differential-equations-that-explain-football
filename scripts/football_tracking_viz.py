@@ -1,3 +1,18 @@
+"""
+Render one football tracking frame with a short future ball trail.
+
+Inputs:
+    - home and away tracking CSV files
+    - frame number and trail length in frames
+
+Outputs:
+    - a static image at --out showing players, ball, and future ball trail.
+
+Expected use:
+    Use this for quick visual sanity checks of the CSV parser and selected
+    match frame before extracting windows for SBI.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -11,6 +26,7 @@ from src.utils.football_viz import visualize_tracking_frame
 
 
 def main() -> None:
+    """Load tracking CSVs, select one frame, and render a pitch image."""
     parser = argparse.ArgumentParser(description="Visualize football tracking data.")
     parser.add_argument("--home", default="data/Sample_Game_1/Sample_Game_1_RawTrackingData_Home_Team.csv")
     parser.add_argument("--away", default="data/Sample_Game_1/Sample_Game_1_RawTrackingData_Away_Team.csv")

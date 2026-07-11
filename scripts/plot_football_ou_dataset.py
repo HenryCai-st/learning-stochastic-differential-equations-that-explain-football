@@ -1,3 +1,19 @@
+"""
+Visualize diversity in the generated football OU baseline dataset.
+
+Inputs:
+    - data/football_ou_dataset/dataset.npz
+
+Outputs:
+    - track overlays colored by OU parameters
+    - parameter histograms
+    - simple trajectory-statistic scatter plots
+
+Expected use:
+    Use this before OU baseline training to confirm that the synthetic data has
+    enough parameter and path diversity.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -16,11 +32,13 @@ from src.utils.football_viz import pitch_background
 
 
 def load_dataset(path: str | Path) -> dict[str, np.ndarray]:
+    """Load an OU dataset `.npz` into a plain dictionary."""
     data = np.load(path, allow_pickle=True)
     return {key: data[key] for key in data.files}
 
 
 def choose_indices(n_items: int, max_tracks: int, seed: int) -> np.ndarray:
+    """Choose a reproducible subset of tracks for readable plotting."""
     rng = np.random.default_rng(seed)
     if n_items <= max_tracks:
         return np.arange(n_items)
@@ -35,6 +53,7 @@ def plot_tracks_colored(
     colorbar_label: str,
     out_path: Path,
 ) -> None:
+    """Overlay sampled tracks on a pitch and color them by one scalar value."""
     fig, ax = plt.subplots(figsize=(11, 7))
     pitch_background(ax, length=PITCH_LENGTH, width=PITCH_WIDTH)
     fig.patch.set_facecolor("#1a1a1a")
@@ -65,6 +84,7 @@ def plot_tracks_colored(
 
 
 def plot_parameter_histograms(parameters: np.ndarray, out_path: Path) -> None:
+    """Plot histograms of the OU baseline parameters."""
     k = parameters[:, 0]
     noise = parameters[:, 1]
 
@@ -94,6 +114,7 @@ def plot_speed_displacement_summary(
     dt: float,
     out_path: Path,
 ) -> None:
+    """Plot simple speed/displacement summaries for generated OU tracks."""
     step = np.linalg.norm(np.diff(tracks, axis=1), axis=2)
     mean_speed = step.mean(axis=1) / dt
     displacement = np.linalg.norm(tracks[:, -1] - tracks[:, 0], axis=1)
@@ -127,6 +148,7 @@ def plot_speed_displacement_summary(
 
 
 def main() -> None:
+    """Load the OU dataset and write all diversity diagnostic figures."""
     parser = argparse.ArgumentParser(description="Plot diversity of generated football OU tracks.")
     parser.add_argument("--dataset", default="data/football_ou_dataset/dataset.npz")
     parser.add_argument("--out-dir", default="outputs/football_ou_dataset_viz")

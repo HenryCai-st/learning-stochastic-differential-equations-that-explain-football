@@ -211,6 +211,7 @@ def plot_dataset_diversity(
 
 
 def main():
+    """Generate Lorenz trajectories, parameters, labels, and summary plots."""
     parser = argparse.ArgumentParser(description="Generate Lorenz SDE dataset")
     parser.add_argument("--n_samples", type=int, default=200, help="Number of parameter sets to sample")
     parser.add_argument("--n_tracks", type=int, default=20, help="Number of trajectories per parameter set")

@@ -23,7 +23,7 @@ track:  (steps, 3)
 theta:  (sigma, rho, beta, noise_scale)
 ```
 
-Football Phase A OU needs:
+The football OU-to-target baseline needs:
 
 ```text
 track:     (steps, 2)
@@ -117,6 +117,7 @@ python scripts\extract_football_windows.py `
   --team home `
   --entity Ball `
   --T 5.0 `
+  --prefix-T 2.0 `
   --dt 0.04 `
   --stride 25 `
   --out data\real_football_windows.npz
@@ -135,12 +136,15 @@ python scripts\extract_football_windows.py `
   --period 1 `
   --start-time 37.2 `
   --T 5.0 `
+  --prefix-T 2.0 `
   --dt 0.04 `
   --out data\real_football_windows.npz
 ```
 
 This extracts the 5-second ball trajectory starting at the row closest to
-37.2 seconds in period 1. To select by exact frame instead:
+37.2 seconds in period 1. With `--prefix-T 2.0`, the first 2 seconds are saved
+as `prefix_tracks`, while the next 3 seconds are saved as `suffix_tracks` for
+held-out prediction evaluation. To select by exact frame instead:
 
 ```powershell
 python scripts\extract_football_windows.py `
@@ -150,6 +154,7 @@ python scripts\extract_football_windows.py `
   --entity Ball `
   --start-frame 12400 `
   --T 5.0 `
+  --prefix-T 2.0 `
   --dt 0.04 `
   --out data\real_football_windows.npz
 ```
@@ -161,6 +166,10 @@ tracks: (N, steps, 2)
 y0:     (N, 2)
 target: (N, 2)
 meta:   window metadata
+prefix_tracks: observed input, if --prefix-T is set
+suffix_tracks: held-out future target, if --prefix-T is set
+change_points: detected segment boundaries
+diagnostics: missing-position and jump-speed checks
 ```
 
 Start with `Ball`. Later use `Player7`, `Player10`, etc.
@@ -195,6 +204,25 @@ python scripts\football_window_clip.py `
 
 Use `.gif` for the most portable output. Use `.mp4` only if ffmpeg is
 available in your Python environment.
+
+After training the model-voting ratio classifier, you can render the same
+window with a live model-vote gauge:
+
+```powershell
+python scripts\football_model_voting_clip.py `
+  --game data\Sample_Game_1 `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --period 1 `
+  --start-time 37.2 `
+  --duration 5.0 `
+  --trail-seconds 2.0 `
+  --score-window-seconds 2.0 `
+  --out outputs\football_model_voting_clip.gif
+```
+
+This uses the trained classifier to score the recent ball trajectory over a
+sliding window. The side gauge is therefore an evaluation visualization of one
+training session, not raw tracking metadata.
 
 ### Step 2: Generate Synthetic OU Training Data
 
@@ -435,7 +463,7 @@ visualize_tracking_frame()
 
 ## 6. Current Limitations
 
-- This is Phase A: position-only OU.
+- This is the position-only OU-to-target baseline.
 - The target is currently the end point of the window.
 - Real tracks do not provide true SDE parameters, so evaluation is visual and
   posterior-predictive, not parameter-MAE.

@@ -1,3 +1,19 @@
+"""
+Evaluate the model-voting SBI posterior on a real football window.
+
+Inputs:
+    - outputs/model_voting_posterior/posterior_chains.npz from
+      recover_model_voting_posterior.py.
+
+Outputs:
+    - posterior predictive path plot, endpoint density, model vote bar chart,
+      winning-model parameter histograms, summary.json, and sampled paths.
+
+Expected use:
+    Run this after model-voting MCMC recovery to check whether sampled future
+    trajectories cover the held-out suffix of a real ball window.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -14,21 +30,32 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH
-from src.sde.model_voting import MODEL_NAMES, MODEL_SPECS, simulate_model_batch
+from src.sde.model_voting import MODEL_NAMES, MODEL_PARAMETER_NAMES, MODEL_SPECS, simulate_model_batch
 from src.utils.football_viz import pitch_background
 
 
-PARAMETER_LABELS = {
-    "brownian": ["noise_scale"],
-    "constant_velocity": ["vx", "vy", "noise_scale"],
-    "ou_target": ["k", "noise_scale"],
-    "piecewise_velocity": ["vx1", "vy1", "vx2", "vy2", "vx3", "vy3", "noise_scale"],
+MODEL_DISPLAY_NAMES = {
+    "brownian": "Brownian\nsigma",
+    "constant_velocity": "Constant velocity\nvx, vy, sigma",
+    "ou_target": "OU target\nk, sigma",
+    "piecewise_velocity": "Piecewise velocity\nv1, v2, v3, sigma",
 }
 
 
 def load_npz(path: str | Path) -> dict[str, np.ndarray]:
+    """Load a compressed NumPy archive into a normal dictionary."""
     data = np.load(path, allow_pickle=True)
     return {key: data[key] for key in data.files}
+
+
+def scalar_string(value, default: str = "unknown") -> str:
+    """Convert scalar values from `.npz` files into readable strings."""
+    if value is None:
+        return default
+    arr = np.asarray(value)
+    if arr.shape == ():
+        return str(arr.item())
+    return str(value)
 
 
 def sample_posterior_paths(
@@ -38,9 +65,10 @@ def sample_posterior_paths(
     dt: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Sample model/theta pairs from the posterior and simulate future paths."""
     rng = np.random.default_rng(seed)
-    y0 = posterior["y0"].astype(np.float32)
-    target = posterior["target"].astype(np.float32)
+    y0 = posterior.get("prediction_y0", posterior["y0"]).astype(np.float32)
+    target = posterior.get("prediction_target", posterior["target"]).astype(np.float32)
     change_points = posterior["change_points"].astype(np.int64)
     weights = posterior["model_vote_weights"].astype(np.float64)
     weights = weights / weights.sum()
@@ -76,16 +104,25 @@ def sample_posterior_paths(
     )
 
 
-def plot_posterior_predictive_paths(observed: np.ndarray, paths: np.ndarray, out_path: Path) -> None:
+def plot_posterior_predictive_paths(
+    observed: np.ndarray,
+    paths: np.ndarray,
+    out_path: Path,
+    future_suffix: np.ndarray | None = None,
+) -> None:
+    """Plot observed prefix, optional true future suffix, and sampled paths."""
     fig, ax = plt.subplots(figsize=(11, 7))
     pitch_background(ax, length=PITCH_LENGTH, width=PITCH_WIDTH)
     fig.patch.set_facecolor("#1a1a1a")
 
     for path in paths:
         ax.plot(path[:, 0], path[:, 1], color="#2ca02c", alpha=0.18, linewidth=0.8)
-    ax.plot(observed[:, 0], observed[:, 1], color="#1f77b4", linewidth=3, label="observed")
+    ax.plot(observed[:, 0], observed[:, 1], color="#1f77b4", linewidth=3, label="observed prefix")
+    if future_suffix is not None and len(future_suffix) > 0:
+        true_future = np.vstack([observed[-1], future_suffix])
+        ax.plot(true_future[:, 0], true_future[:, 1], color="#ffffff", linewidth=2.8, linestyle="--", label="true future")
     ax.plot(observed[0, 0], observed[0, 1], "o", color="#1f77b4", markersize=8, markeredgecolor="white", label="start")
-    ax.plot(observed[-1, 0], observed[-1, 1], "s", color="#dc2626", markersize=8, markeredgecolor="white", label="end")
+    ax.plot(observed[-1, 0], observed[-1, 1], "s", color="#dc2626", markersize=8, markeredgecolor="white", label="prediction start")
     ax.set_title("Model-voting posterior predictive paths", color="white", fontsize=14, pad=10)
     ax.legend(loc="upper right", facecolor="#1a1a1a", edgecolor="white", labelcolor="white")
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -93,14 +130,19 @@ def plot_posterior_predictive_paths(observed: np.ndarray, paths: np.ndarray, out
     plt.close(fig)
 
 
-def plot_endpoint_density(paths: np.ndarray, observed: np.ndarray, out_path: Path) -> None:
+def plot_endpoint_density(paths: np.ndarray, observed: np.ndarray, out_path: Path, future_suffix: np.ndarray | None = None) -> None:
+    """Plot a density map of posterior predictive final positions."""
     endpoints = paths[:, -1]
     fig, ax = plt.subplots(figsize=(11, 7))
     pitch_background(ax, length=PITCH_LENGTH, width=PITCH_WIDTH)
     fig.patch.set_facecolor("#1a1a1a")
     hb = ax.hexbin(endpoints[:, 0], endpoints[:, 1], gridsize=38, cmap="magma", mincnt=1, alpha=0.85)
     ax.plot(observed[:, 0], observed[:, 1], color="#00bcd4", linewidth=2.5)
-    ax.plot(observed[-1, 0], observed[-1, 1], "s", color="white", markersize=8, markeredgecolor="#00bcd4")
+    if future_suffix is not None and len(future_suffix) > 0:
+        ax.plot(future_suffix[:, 0], future_suffix[:, 1], color="white", linewidth=2.4, linestyle="--")
+        ax.plot(future_suffix[-1, 0], future_suffix[-1, 1], "s", color="white", markersize=8, markeredgecolor="#00bcd4")
+    else:
+        ax.plot(observed[-1, 0], observed[-1, 1], "s", color="white", markersize=8, markeredgecolor="#00bcd4")
     ax.set_title("Posterior predictive endpoint density", color="white", fontsize=14, pad=10)
     cbar = fig.colorbar(hb, ax=ax, fraction=0.032, pad=0.02)
     cbar.set_label("sample count", color="white")
@@ -112,13 +154,35 @@ def plot_endpoint_density(paths: np.ndarray, observed: np.ndarray, out_path: Pat
 
 
 def plot_model_votes(weights: np.ndarray, out_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(8.5, 4.5))
-    ax.bar(MODEL_NAMES, weights, color=["#e45756", "#4c78a8", "#54a24b", "#f58518"])
-    ax.set_ylabel("posterior vote weight")
+    """Render p(model | observed prefix) as a model-family bar chart."""
+    labels = [MODEL_DISPLAY_NAMES[name] for name in MODEL_NAMES]
+    colors = ["#e45756", "#4c78a8", "#54a24b", "#f58518"]
+
+    fig, ax = plt.subplots(figsize=(9.5, 4.8))
+    bars = ax.bar(labels, weights, color=colors)
+    for bar, weight in zip(bars, weights):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.02,
+            f"{weight:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    ax.set_xlabel("candidate SDE model family")
+    ax.set_ylabel("posterior model weight")
     ax.set_ylim(0.0, max(1.0, float(weights.max()) * 1.15))
-    ax.set_title("Model posterior vote weights")
+    ax.set_title("Posterior model vote: p(model | observed prefix)")
     ax.grid(axis="y", alpha=0.25)
-    ax.tick_params(axis="x", rotation=20)
+    ax.tick_params(axis="x", rotation=0)
+    ax.text(
+        0.01,
+        -0.20,
+        "This figure shows model-family probabilities. Theta distributions are plotted separately.",
+        transform=ax.transAxes,
+        fontsize=8.5,
+        color="#444444",
+    )
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=170, bbox_inches="tight")
@@ -126,8 +190,9 @@ def plot_model_votes(weights: np.ndarray, out_path: Path) -> None:
 
 
 def plot_winning_parameter_histograms(posterior: dict[str, np.ndarray], winning_model: str, out_path: Path) -> None:
+    """Plot posterior parameter histograms for the highest-vote model family."""
     samples = posterior[f"{winning_model}_samples"].astype(np.float32)
-    labels = PARAMETER_LABELS[winning_model]
+    labels = MODEL_PARAMETER_NAMES[winning_model]
     n_params = MODEL_SPECS[winning_model].param_dim
     n_cols = min(3, n_params)
     n_rows = int(np.ceil(n_params / n_cols))
@@ -137,14 +202,18 @@ def plot_winning_parameter_histograms(posterior: dict[str, np.ndarray], winning_
     for dim in range(n_params):
         ax = axes[dim]
         ax.hist(samples[:, dim], bins=35, color="#4c78a8", edgecolor="white", linewidth=0.5)
-        ax.set_title(labels[dim])
-        ax.set_xlabel("value")
+        ax.set_title(f"theta[{dim}] = {labels[dim]}")
+        ax.set_xlabel(f"{labels[dim]} value")
         ax.set_ylabel("count")
         ax.grid(True, alpha=0.25)
     for ax in axes[n_params:]:
         ax.axis("off")
 
-    fig.suptitle(f"Winning model parameter posterior: {winning_model}", fontsize=13, fontweight="bold")
+    fig.suptitle(
+        f"Parameter posterior p(theta | {winning_model}, observed prefix)",
+        fontsize=13,
+        fontweight="bold",
+    )
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=170, bbox_inches="tight")
@@ -152,6 +221,7 @@ def plot_winning_parameter_histograms(posterior: dict[str, np.ndarray], winning_
 
 
 def main() -> None:
+    """Parse arguments, simulate posterior predictive paths, and save outputs."""
     parser = argparse.ArgumentParser(description="Evaluate model-voting posterior predictive distribution.")
     parser.add_argument("--posterior", default="outputs/model_voting_posterior/posterior_chains.npz")
     parser.add_argument("--n-paths", type=int, default=300)
@@ -163,7 +233,14 @@ def main() -> None:
 
     posterior = load_npz(args.posterior)
     observed = posterior["observed"].astype(np.float32)
-    steps = len(observed) if args.steps <= 0 else args.steps
+    future_suffix = posterior.get("future_suffix", np.empty((0, 2), dtype=np.float32)).astype(np.float32)
+    if args.steps > 0:
+        steps = args.steps
+    elif len(future_suffix) > 0:
+        # Include the prefix endpoint as step 0, then predict one point for each held-out suffix step.
+        steps = len(future_suffix) + 1
+    else:
+        steps = len(observed)
     paths, sampled_model_ids, _ = sample_posterior_paths(
         posterior=posterior,
         n_paths=args.n_paths,
@@ -176,13 +253,17 @@ def main() -> None:
     weights = weights / weights.sum()
     winning_model = MODEL_NAMES[int(np.argmax(weights))]
     endpoints = paths[:, -1]
-    observed_end = observed[-1]
-    endpoint_error = np.linalg.norm(endpoints - observed_end[None], axis=1)
+    target_end = future_suffix[-1] if len(future_suffix) > 0 else observed[-1]
+    endpoint_error = np.linalg.norm(endpoints - target_end[None], axis=1)
+    if len(future_suffix) > 0 and paths.shape[1] == len(future_suffix) + 1:
+        path_error = np.sqrt(((paths[:, 1:] - future_suffix[None]) ** 2).sum(axis=2)).mean(axis=1)
+    else:
+        path_error = np.full(len(paths), np.nan, dtype=np.float32)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    plot_posterior_predictive_paths(observed, paths, out_dir / "posterior_predictive_paths.png")
-    plot_endpoint_density(paths, observed, out_dir / "endpoint_density.png")
+    plot_posterior_predictive_paths(observed, paths, out_dir / "posterior_predictive_paths.png", future_suffix)
+    plot_endpoint_density(paths, observed, out_dir / "endpoint_density.png", future_suffix)
     plot_model_votes(weights, out_dir / "model_vote_weights.png")
     plot_winning_parameter_histograms(posterior, winning_model, out_dir / "winning_model_parameter_histograms.png")
 
@@ -190,6 +271,7 @@ def main() -> None:
         "posterior": args.posterior,
         "n_paths": args.n_paths,
         "winning_model": winning_model,
+        "protocol": scalar_string(posterior.get("protocol")),
         "model_vote_weights": {name: float(weight) for name, weight in zip(MODEL_NAMES, weights)},
         "sampled_model_counts": {
             name: int(np.sum(sampled_model_ids == i))
@@ -200,14 +282,21 @@ def main() -> None:
             "p10": float(np.quantile(endpoint_error, 0.10)),
             "p90": float(np.quantile(endpoint_error, 0.90)),
         },
+        "future_path_error_m": {
+            "median": None if np.isnan(path_error).all() else float(np.nanmedian(path_error)),
+            "p10": None if np.isnan(path_error).all() else float(np.nanquantile(path_error, 0.10)),
+            "p90": None if np.isnan(path_error).all() else float(np.nanquantile(path_error, 0.90)),
+        },
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     np.savez_compressed(
         out_dir / "posterior_predictive_samples.npz",
         observed=observed,
         paths=paths,
+        future_suffix=future_suffix,
         sampled_model_ids=sampled_model_ids,
         endpoint_error=endpoint_error,
+        path_error=path_error,
     )
     print(json.dumps(summary, indent=2))
     print(f"Saved model-voting evaluation outputs to {out_dir}")

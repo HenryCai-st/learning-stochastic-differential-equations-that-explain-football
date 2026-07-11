@@ -105,3 +105,34 @@ def trajectory_feature_dict(track: np.ndarray, dt: float, smooth_radius: int = 1
         "turn_angle": turn_angle,
     }
 
+
+def trajectory_diagnostics(track: np.ndarray, dt: float, jump_speed_threshold: float = 45.0) -> dict[str, float | int]:
+    """
+    Summarize missing positions and extreme frame-to-frame jumps.
+
+    The default jump threshold is deliberately high for ball data. Values above
+    it are useful warnings for tracking artifacts or windows that need manual
+    inspection before being used as real observations.
+    """
+    track = np.asarray(track, dtype=np.float32)
+    missing_rows = np.isnan(track).any(axis=1)
+    velocity = finite_difference_velocity(track, dt=dt)
+    speed = speed_from_velocity(velocity)
+    finite_speed = speed[np.isfinite(speed)]
+    if len(finite_speed) == 0:
+        max_speed = 0.0
+        mean_speed = 0.0
+        extreme_jumps = 0
+    else:
+        max_speed = float(finite_speed.max())
+        mean_speed = float(finite_speed.mean())
+        extreme_jumps = int(np.sum(finite_speed > jump_speed_threshold))
+    return {
+        "steps": int(len(track)),
+        "missing_rows": int(missing_rows.sum()),
+        "missing_fraction": float(missing_rows.mean()) if len(track) else 0.0,
+        "max_speed_mps": max_speed,
+        "mean_speed_mps": mean_speed,
+        "extreme_jump_count": extreme_jumps,
+        "jump_speed_threshold_mps": float(jump_speed_threshold),
+    }

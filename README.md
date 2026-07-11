@@ -21,7 +21,10 @@ python scripts\extract_football_windows.py `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
   --entity Ball `
+  --period 1 `
+  --start-time 37.2 `
   --T 5.0 `
+  --prefix-T 2.0 `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
@@ -54,6 +57,16 @@ python scripts\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
+
+python scripts\football_model_voting_clip.py `
+  --game data\Sample_Game_1 `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --period 1 `
+  --start-time 37.2 `
+  --duration 5.0 `
+  --trail-seconds 2.0 `
+  --score-window-seconds 2.0 `
+  --out outputs\football_model_voting_clip.gif
 ```
 
 `--T` is the window duration. To extract one specific observed interval instead
@@ -68,9 +81,16 @@ python scripts\extract_football_windows.py `
   --period 1 `
   --start-time 37.2 `
   --T 5.0 `
+  --prefix-T 2.0 `
   --dt 0.04 `
   --out data\real_football_windows.npz
 ```
+
+With `--prefix-T 2.0`, the first 2 seconds are saved as the observed input and
+the remaining 3 seconds are saved as the future suffix for evaluation. The
+model-voting data generator automatically trains on `prefix_tracks` when they
+exist, so MCMC inference is conditioned on the 2-second prefix rather than the
+full 5-second window.
 
 To visually inspect the same kind of time window as a short clip:
 
@@ -84,6 +104,10 @@ python scripts\football_window_clip.py `
   --fps 12 `
   --out outputs\football_window_clip.gif
 ```
+
+The raw clip above only shows tracking data. The model-voting clip in the run
+order uses the trained ratio classifier and adds a live gauge showing which SDE
+candidate currently best matches the recent ball trajectory.
 
 The next refinement is the stricter prediction protocol: split each real window
 into observed prefix and future suffix, infer only from the prefix, then score

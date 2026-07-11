@@ -43,6 +43,7 @@ class RatioClassifier(nn.Module):
     """Classifier head for C_phi(track, theta)."""
 
     def __init__(self, encoder: TrajectoryEncoder, feature_dim: int = 256, param_dim: int = 4):
+        """Create the trajectory encoder, theta encoder, and binary head."""
         super().__init__()
         self.encoder = encoder
         self.theta_encoder = nn.Sequential(
@@ -78,6 +79,7 @@ def make_negative_params(params: torch.Tensor) -> torch.Tensor:
 
 
 def batch_loss_and_metrics(model: RatioClassifier, tracks: torch.Tensor, params: torch.Tensor):
+    """Compute matched/mismatched BCE loss and batch diagnostics."""
     neg_params = make_negative_params(params)
 
     pos_logits = model(tracks, params)
@@ -106,6 +108,7 @@ def batch_loss_and_metrics(model: RatioClassifier, tracks: torch.Tensor, params:
 
 
 def run_epoch(model, loader, optimizer, device, training: bool):
+    """Run one train or validation epoch for the Lorenz ratio classifier."""
     model.train(training)
     ctx = torch.enable_grad() if training else torch.no_grad()
 
@@ -144,6 +147,7 @@ def run_epoch(model, loader, optimizer, device, training: bool):
 
 
 def main():
+    """Train the Lorenz matched-vs-mismatched ratio classifier."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="./data/lorenz_dataset")
     parser.add_argument("--epochs", type=int, default=80)

@@ -1,3 +1,21 @@
+"""
+Score one real football window with the single-model OU baseline.
+
+Inputs:
+    - data/real_football_windows.npz from extract_football_windows.py
+    - checkpoints/football_ou_ratio_best.pt from train_football_ou_ratio.py
+
+Outputs:
+    - top candidate CSV
+    - posterior predictive SVG
+    - parameter distribution SVG
+    - summary.json and posterior_predictive.npz
+
+Expected use:
+    Use this as the OU baseline/failure comparison for the final model-voting
+    presentation. The final project workflow uses model-voting scripts instead.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +38,7 @@ PARAMETER_NAMES = ("k", "noise_scale")
 
 
 def load_model(path: Path, device: torch.device):
+    """Load the trained OU baseline ratio classifier and checkpoint metadata."""
     if not path.exists():
         raise FileNotFoundError(
             f"Checkpoint not found: {path}. Run scripts/train_football_ou_ratio.py first."
@@ -56,6 +75,7 @@ def write_future_svg(out_path: Path, observed: np.ndarray, futures: list[np.ndar
     ]
 
     def pts(path):
+        """Convert pitch-metre coordinates into SVG polyline point text."""
         x = pad + path[:, 0] / 105.0 * (width - 2 * pad)
         y = height - pad - path[:, 1] / 68.0 * (height - 2 * pad)
         return " ".join(f"{a:.1f},{b:.1f}" for a, b in zip(x, y))
@@ -86,7 +106,7 @@ def ou_transition_loglik_per_step(
     dt: float,
 ) -> np.ndarray:
     """
-    Average Gaussian Euler-transition log-likelihood for Phase A OU.
+    Average Gaussian Euler-transition log-likelihood for the football OU baseline.
 
     This scores whether a parameter can explain the observed *increments*:
         x[t+1] = x[t] + k * (target - x[t]) dt + noise * sqrt(dt) eps
@@ -110,7 +130,7 @@ def ou_transition_loglik_per_step(
 
 def log_prior_ou(theta: np.ndarray) -> float:
     """
-    Log prior for Phase A football OU parameters.
+    Log prior for football OU baseline parameters.
 
     k is uniform. noise_scale follows the log-uniform prior used by
     sample_ou_parameters(), so p(noise) is proportional to 1 / noise inside
@@ -159,6 +179,7 @@ def deterministic_ou_path(
     steps: int,
     dt: float,
 ) -> np.ndarray:
+    """Simulate deterministic OU mean paths without diffusion noise."""
     paths = np.zeros((len(params), steps, 2), dtype=np.float32)
     paths[:, 0] = y0[None]
     current = np.repeat(y0[None].astype(np.float32), len(params), axis=0)
@@ -171,6 +192,7 @@ def deterministic_ou_path(
 
 
 def rmse_to_observed(paths: np.ndarray, observed: np.ndarray) -> np.ndarray:
+    """Compute per-path RMSE against one observed trajectory."""
     return np.sqrt(((paths - observed[None]) ** 2).sum(axis=2).mean(axis=1))
 
 
@@ -327,6 +349,7 @@ def write_histogram_svg(
 
 @torch.no_grad()
 def main() -> None:
+    """Score one real window, run candidate/MCMC inference, and save OU plots."""
     parser = argparse.ArgumentParser(description="Score a real football window with a trained OU ratio classifier.")
     parser.add_argument("--real-windows", default="data/real_football_windows.npz")
     parser.add_argument("--checkpoint", default="checkpoints/football_ou_ratio_best.pt")
