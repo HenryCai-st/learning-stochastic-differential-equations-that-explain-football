@@ -29,9 +29,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.recover_model_voting_posterior import (
+from scripts.model_voting_pipeline.recover_model_voting_posterior import (
     load_checkpoint,
     logmeanexp,
     normalize_track,

@@ -18,10 +18,39 @@ Main implementation task list:
 SBI_MODEL_VOTING_IMPLEMENTATION_TASKS.md
 ```
 
+For a beginner-oriented explanation of the full project, every active script,
+all important functions, result interpretation, advantages, limitations, and
+the improvement roadmap, read:
+
+```text
+MODEL_VOTING_PROJECT_GUIDE.md
+```
+
+The archived single-model OU baseline is documented separately in
+`OU_BASELINE_WORKFLOW.md`.
+
+Script organization:
+
+```text
+scripts/model_voting_pipeline/  required six-stage training/inference workflow
+scripts/tools/                  optional plots, raw-data inspection, and clips
+scripts/OU_workflow/            archived standalone OU baseline
+scripts/Lorenz_workflow/        archived Lorenz demonstration
+```
+
+Source organization:
+
+```text
+src/data, src/models, src/sde, src/utils   active model-voting modules
+src/legacy                                historical modules only
+```
+
+See `src/README.md` for a file-by-file active/legacy table.
+
 Current run order:
 
 ```powershell
-python scripts\extract_football_windows.py `
+python scripts\model_voting_pipeline\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -33,24 +62,31 @@ python scripts\extract_football_windows.py `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
-python scripts\generate_model_voting_data.py `
+python scripts\model_voting_pipeline\generate_model_voting_data.py `
   --real-windows data\real_football_windows.npz `
   --n-per-model 1000 `
   --T 5.0 `
   --dt 0.04 `
   --out-dir data\model_voting_dataset
 
-python scripts\plot_model_voting_dataset.py `
+python scripts\tools\plot_model_voting_dataset.py `
   --dataset data\model_voting_dataset\dataset.npz `
   --out-dir outputs\model_voting_dataset_viz
 
-python scripts\train_model_voting_ratio.py `
+python scripts\model_voting_pipeline\train_model_voting_ratio.py `
   --data-dir data\model_voting_dataset `
   --epochs 100 `
   --batch-size 128 `
   --out-dir checkpoints
 
-python scripts\recover_model_voting_posterior.py `
+python scripts\model_voting_pipeline\evaluate_synthetic_model_recovery.py `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --dataset data\model_voting_dataset\dataset.npz `
+  --n-cases 80 `
+  --n-evidence-samples 512 `
+  --out-dir outputs\synthetic_model_recovery
+
+python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --window-index 0 `
@@ -59,19 +95,12 @@ python scripts\recover_model_voting_posterior.py `
   --n-evidence-samples 4096 `
   --out-dir outputs\model_voting_posterior
 
-python scripts\evaluate_model_voting.py `
+python scripts\model_voting_pipeline\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
 
-python scripts\evaluate_synthetic_model_recovery.py `
-  --checkpoint checkpoints\model_voting_ratio_best.pt `
-  --dataset data\model_voting_dataset\dataset.npz `
-  --n-cases 80 `
-  --n-evidence-samples 512 `
-  --out-dir outputs\synthetic_model_recovery
-
-python scripts\football_model_voting_clip.py `
+python scripts\tools\football_model_voting_clip.py `
   --game data\Sample_Game_1 `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --period 1 `
@@ -86,7 +115,7 @@ python scripts\football_model_voting_clip.py `
 of scanning all possible windows, add either `--start-time` or `--start-frame`:
 
 ```powershell
-python scripts\extract_football_windows.py `
+python scripts\model_voting_pipeline\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -108,7 +137,7 @@ full 5-second window.
 To visually inspect the same kind of time window as a short clip:
 
 ```powershell
-python scripts\football_window_clip.py `
+python scripts\tools\football_window_clip.py `
   --game data\Sample_Game_1 `
   --period 1 `
   --start-time 37.2 `

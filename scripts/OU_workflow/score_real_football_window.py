@@ -27,9 +27,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.train_football_ou_ratio import ConditionedRatioClassifier
-from src.data.football_dataset import OUParameterNormalizer, RealFootballWindows
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.OU_workflow.train_football_ou_ratio import ConditionedRatioClassifier
+from src.legacy.ou.football_dataset import OUParameterNormalizer, RealFootballWindows
 from src.models.encoder import TrajectoryEncoder
 from src.sde.football_ou import PARAMETER_HIGH, PARAMETER_LOW, sample_ou_parameters, simulate_position_ou_batch
 
@@ -41,7 +41,7 @@ def load_model(path: Path, device: torch.device):
     """Load the trained OU baseline ratio classifier and checkpoint metadata."""
     if not path.exists():
         raise FileNotFoundError(
-            f"Checkpoint not found: {path}. Run scripts/train_football_ou_ratio.py first."
+            f"Checkpoint not found: {path}. Run scripts/OU_workflow/train_football_ou_ratio.py first."
         )
 
     # This is a local project checkpoint that also stores dataset statistics.
@@ -379,7 +379,7 @@ def main() -> None:
     model, ckpt = load_model(Path(args.checkpoint), device)
     if not Path(args.real_windows).exists():
         raise FileNotFoundError(
-            f"Real windows not found: {args.real_windows}. Run scripts/extract_football_windows.py first."
+            f"Real windows not found: {args.real_windows}. Run scripts/model_voting_pipeline/extract_football_windows.py first."
         )
     real = RealFootballWindows(
         args.real_windows,

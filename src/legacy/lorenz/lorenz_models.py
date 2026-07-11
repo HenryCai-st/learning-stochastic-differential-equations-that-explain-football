@@ -1,5 +1,5 @@
 """
-src/models/lorenz_models.py
+src/legacy/lorenz/lorenz_models.py
 ===========================
 Neural-network components for Lorenz SDE parameter inference.
 

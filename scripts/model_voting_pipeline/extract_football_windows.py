@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.data.football_tracking import (
     extract_fixed_windows,
     extract_single_window,

@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from scripts.Lorenz_workflow.generate_data import sample_parameters, simulate_batch
 from scripts.Lorenz_workflow.recover_posterior import load_ratio_classifier, random_walk_metropolis_hastings
-from src.data.dataset import SDEDataset
+from src.legacy.lorenz.dataset import SDEDataset
 
 DISPLAY_NAMES = ["sigma", "rho", "beta", "noise"]
 GT_COLOR = "#E8593C"

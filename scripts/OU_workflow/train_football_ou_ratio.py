@@ -25,8 +25,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.football_dataset import FootballOUDataset
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.legacy.ou.football_dataset import FootballOUDataset
 from src.models.encoder import TrajectoryEncoder
 
 

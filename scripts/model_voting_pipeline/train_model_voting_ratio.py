@@ -25,7 +25,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.data.model_voting_dataset import ModelVotingDataset
 from src.models.model_voting_ratio import ModelVotingRatioClassifier

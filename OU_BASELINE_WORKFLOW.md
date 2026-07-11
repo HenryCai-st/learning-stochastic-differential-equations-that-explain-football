@@ -1,4 +1,4 @@
-# Football Tracks To SBI Model Workflow
+# Archived Single-Model OU Baseline Workflow
 
 This document explains the older single-model OU baseline and how real football
 ball tracking data enters the encoder/contrastive/SBI code. The active final
@@ -51,13 +51,13 @@ src/sde/football_ou.py
 Dataset adapter:
 
 ```text
-src/data/football_dataset.py
+src/legacy/ou/football_dataset.py
 ```
 
 Real CSV window extractor:
 
 ```text
-scripts/extract_football_windows.py
+scripts/model_voting_pipeline/extract_football_windows.py
 ```
 
 Reusable tracking-data package:
@@ -75,25 +75,25 @@ src/utils/football_viz.py
 Visualization CLI wrapper:
 
 ```text
-scripts/football_tracking_viz.py
+scripts/tools/football_tracking_viz.py
 ```
 
 Synthetic OU dataset generator:
 
 ```text
-scripts/generate_football_ou_data.py
+scripts/OU_workflow/generate_football_ou_data.py
 ```
 
 Conditioned ratio classifier training:
 
 ```text
-scripts/train_football_ou_ratio.py
+scripts/OU_workflow/train_football_ou_ratio.py
 ```
 
 Real-window posterior scoring and output rendering:
 
 ```text
-scripts/score_real_football_window.py
+scripts/OU_workflow/score_real_football_window.py
 ```
 
 This file now covers the football analogue of both Lorenz:
@@ -113,7 +113,7 @@ tracks and parameter distribution histograms.
 Use the reusable tracking parser through:
 
 ```powershell
-python scripts\extract_football_windows.py `
+python scripts\model_voting_pipeline\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -130,7 +130,7 @@ specific window instead of scanning with `--stride`, provide either
 `--start-time` or `--start-frame`:
 
 ```powershell
-python scripts\extract_football_windows.py `
+python scripts\model_voting_pipeline\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -149,7 +149,7 @@ as `prefix_tracks`, while the next 3 seconds are saved as `suffix_tracks` for
 held-out prediction evaluation. To select by exact frame instead:
 
 ```powershell
-python scripts\extract_football_windows.py `
+python scripts\model_voting_pipeline\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -176,11 +176,11 @@ diagnostics: missing-position and jump-speed checks
 
 Start with `Ball`. Later use `Player7`, `Player10`, etc.
 
-`scripts/football_tracking_viz.py` is not the training data adapter anymore.
+`scripts/tools/football_tracking_viz.py` is not the training data adapter anymore.
 Its role is visual inspection:
 
 ```powershell
-python scripts\football_tracking_viz.py `
+python scripts\tools\football_tracking_viz.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --frame 1 `
@@ -194,7 +194,7 @@ the extractor and the visualizer use the same CSV interpretation.
 For a moving clip of one selected time window, use:
 
 ```powershell
-python scripts\football_window_clip.py `
+python scripts\tools\football_window_clip.py `
   --game data\Sample_Game_1 `
   --period 1 `
   --start-time 37.2 `
@@ -211,7 +211,7 @@ After training the model-voting ratio classifier, you can render the same
 window with a live model-vote gauge:
 
 ```powershell
-python scripts\football_model_voting_clip.py `
+python scripts\tools\football_model_voting_clip.py `
   --game data\Sample_Game_1 `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --period 1 `
@@ -232,7 +232,7 @@ Train on synthetic tracks, not directly on real tracks, because the real data
 has no ground-truth SDE parameters.
 
 ```powershell
-python scripts\generate_football_ou_data.py `
+python scripts\OU_workflow\generate_football_ou_data.py `
   --real-windows data\real_football_windows.npz `
   --n-samples 200 `
   --n-tracks 20 `
@@ -264,7 +264,7 @@ group_ids:  (N,)
 ### Step 3: Train The Conditioned Ratio Classifier
 
 ```powershell
-python scripts\train_football_ou_ratio.py `
+python scripts\OU_workflow\train_football_ou_ratio.py `
   --data-dir data\football_ou_dataset `
   --epochs 80 `
   --batch-size 128 `
@@ -304,7 +304,7 @@ checkpoints/football_ou_ratio_history.csv
 ### Step 4: Run Real-Window Inference
 
 ```powershell
-python scripts\score_real_football_window.py `
+python scripts\OU_workflow\score_real_football_window.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\football_ou_ratio_best.pt `
   --window-index 0 `
@@ -346,7 +346,7 @@ outputs/football_ou_real/summary.json
 Quick candidate-grid mode, without MCMC:
 
 ```powershell
-python scripts\score_real_football_window.py `
+python scripts\OU_workflow\score_real_football_window.py `
   --sampler candidates `
   --n-candidates 5000 `
   --out-dir outputs\football_ou_real_candidates
@@ -418,7 +418,7 @@ contrastive / ratio learning
 Now implemented for football in:
 
 ```text
-scripts/train_football_ou_ratio.py
+scripts/OU_workflow/train_football_ou_ratio.py
 ```
 
 Dataset contract:

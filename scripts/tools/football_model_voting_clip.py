@@ -30,9 +30,9 @@ from matplotlib.animation import FuncAnimation
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.football_window_clip import (
+from scripts.tools.football_window_clip import (
     ball_xy,
     player_columns,
     player_offsets,
@@ -41,7 +41,7 @@ from scripts.football_window_clip import (
     select_indices,
     tracking_paths,
 )
-from scripts.recover_model_voting_posterior import checkpoint_array, load_checkpoint, score_params
+from scripts.model_voting_pipeline.recover_model_voting_posterior import checkpoint_array, load_checkpoint, score_params
 from src.data.football_tracking import PITCH_LENGTH, PITCH_WIDTH, load_tracking
 from src.data.segmentation import detect_change_points, fixed_even_change_points
 from src.sde.model_voting import MODEL_NAMES, pitch_normalize_condition, sample_model_parameters

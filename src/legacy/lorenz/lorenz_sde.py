@@ -1,5 +1,5 @@
 """
-src/sde/lorenz_sde.py
+src/legacy/lorenz/lorenz_sde.py
 =====================
 Stochastic Lorenz system — two backends:
 

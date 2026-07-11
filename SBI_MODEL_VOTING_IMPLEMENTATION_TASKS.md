@@ -38,7 +38,7 @@ posterior predictive distribution
 Current implemented run order:
 
 ```powershell
-python scripts\extract_football_windows.py `
+python scripts\model_voting_pipeline\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -50,24 +50,24 @@ python scripts\extract_football_windows.py `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
-python scripts\generate_model_voting_data.py `
+python scripts\model_voting_pipeline\generate_model_voting_data.py `
   --real-windows data\real_football_windows.npz `
   --n-per-model 1000 `
   --T 5.0 `
   --dt 0.04 `
   --out-dir data\model_voting_dataset
 
-python scripts\plot_model_voting_dataset.py `
+python scripts\tools\plot_model_voting_dataset.py `
   --dataset data\model_voting_dataset\dataset.npz `
   --out-dir outputs\model_voting_dataset_viz
 
-python scripts\train_model_voting_ratio.py `
+python scripts\model_voting_pipeline\train_model_voting_ratio.py `
   --data-dir data\model_voting_dataset `
   --epochs 100 `
   --batch-size 128 `
   --out-dir checkpoints
 
-python scripts\recover_model_voting_posterior.py `
+python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --window-index 0 `
@@ -76,19 +76,19 @@ python scripts\recover_model_voting_posterior.py `
   --n-evidence-samples 4096 `
   --out-dir outputs\model_voting_posterior
 
-python scripts\evaluate_model_voting.py `
+python scripts\model_voting_pipeline\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
 
-python scripts\evaluate_synthetic_model_recovery.py `
+python scripts\model_voting_pipeline\evaluate_synthetic_model_recovery.py `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --dataset data\model_voting_dataset\dataset.npz `
   --n-cases 80 `
   --n-evidence-samples 512 `
   --out-dir outputs\synthetic_model_recovery
 
-python scripts\football_model_voting_clip.py `
+python scripts\tools\football_model_voting_clip.py `
   --game data\Sample_Game_1 `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --period 1 `
@@ -117,7 +117,7 @@ evaluation.
 Optional segment diagnostic plot:
 
 ```powershell
-python scripts\plot_real_window_segments.py `
+python scripts\tools\plot_real_window_segments.py `
   --real-windows data\real_football_windows.npz `
   --window-index 0 `
   --out outputs\real_window_segments.png
@@ -126,7 +126,7 @@ python scripts\plot_real_window_segments.py `
 Optional real-data visual inspection:
 
 ```powershell
-python scripts\football_window_clip.py `
+python scripts\tools\football_window_clip.py `
   --game data\Sample_Game_1 `
   --period 1 `
   --start-time 37.2 `
@@ -246,13 +246,13 @@ Tasks:
 Current OU generator:
 
 ```text
-scripts/generate_football_ou_data.py
+scripts/OU_workflow/generate_football_ou_data.py
 ```
 
 New model-voting generator should create a mixed dataset:
 
 ```text
-scripts/generate_model_voting_data.py
+scripts/model_voting_pipeline/generate_model_voting_data.py
 ```
 
 Dataset keys:
@@ -282,8 +282,8 @@ Implemented files:
 
 ```text
 src/sde/model_voting.py
-scripts/generate_model_voting_data.py
-scripts/plot_model_voting_dataset.py
+scripts/model_voting_pipeline/generate_model_voting_data.py
+scripts/tools/plot_model_voting_dataset.py
 ```
 
 ## 6. Contrastive Ratio Classifier
@@ -325,7 +325,7 @@ Implemented files:
 ```text
 src/data/model_voting_dataset.py
 src/models/model_voting_ratio.py
-scripts/train_model_voting_ratio.py
+scripts/model_voting_pipeline/train_model_voting_ratio.py
 ```
 
 ## 7. MCMC Posterior Inference
@@ -348,7 +348,7 @@ normalize evidence ratios into model probabilities using equal model priors
 
 Tasks:
 
-- [x] Add `scripts/recover_model_voting_posterior.py`.
+- [x] Add `scripts/model_voting_pipeline/recover_model_voting_posterior.py`.
 - [x] Implement model-specific priors.
 - [x] Implement random-walk Metropolis-Hastings per model.
 - [x] Store chains per model.
@@ -385,7 +385,7 @@ Render:
 
 Tasks:
 
-- [x] Add `scripts/evaluate_model_voting.py`.
+- [x] Add `scripts/model_voting_pipeline/evaluate_model_voting.py`.
 - [x] Plot observed prefix and true future suffix separately.
 - [x] Plot sampled future paths.
 - [x] Plot future endpoint density.
@@ -460,7 +460,7 @@ Tasks:
 - [ ] Repeat evidence estimation with multiple random seeds to measure Monte
       Carlo variability.
 
-## 11. Presentation Story
+## 11. Optional Demonstration Checklist
 
 Use the current OU failure as motivation:
 
@@ -473,20 +473,19 @@ parameters.
 The final output is a distribution over future positions, not one track.
 ```
 
-Minimum final demo:
+Current model-voting demonstration:
 
 - [x] Show raw observed ball window.
-- [x] Show OU failure.
 - [x] Show detected piecewise segments.
-- [x] Show model vote distribution.
-- [x] Show winning model parameter posterior.
-- [x] Show posterior predictive future-density plot.
+- [ ] Regenerate model vote distribution with corrected prior-integrated evidence.
+- [ ] Regenerate winning-model parameter posterior with corrected inference.
+- [ ] Regenerate posterior predictive future density with corrected forecasting assumptions.
 
 Presentation artifact commands:
 
 ```powershell
 # Raw observed ball movement clip.
-python scripts\football_window_clip.py `
+python scripts\tools\football_window_clip.py `
   --game data\Sample_Game_1 `
   --period 1 `
   --start-time 37.2 `
@@ -495,22 +494,15 @@ python scripts\football_window_clip.py `
   --out outputs\football_window_clip.gif
 
 # Detected piecewise segment figure.
-python scripts\plot_real_window_segments.py `
+python scripts\tools\plot_real_window_segments.py `
   --real-windows data\real_football_windows.npz `
   --window-index 0 `
   --out outputs\real_window_segments.png
 
-# OU failure figure from the older single-model workflow.
-python scripts\score_real_football_window.py `
-  --real-windows data\real_football_windows.npz `
-  --checkpoint checkpoints\football_ou_ratio_best.pt `
-  --window-index 0 `
-  --out-dir outputs\football_ou_real
-
 # Model-voting posterior figures:
 # model_vote_weights.png, winning_model_parameter_histograms.png,
 # endpoint_density.png, posterior_predictive_paths.png.
-python scripts\evaluate_model_voting.py `
+python scripts\model_voting_pipeline\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
