@@ -1,3 +1,19 @@
+"""
+Train the model-voting neural ratio classifier.
+
+Inputs:
+    - data/model_voting_dataset/dataset.npz from generate_model_voting_data.py
+
+Outputs:
+    - checkpoints/model_voting_ratio_best.pt
+    - checkpoints/model_voting_ratio_history.csv with global and per-model
+      validation metrics.
+
+Expected use:
+    Run this after synthetic model-voting data generation. The trained logit is
+    later used as the likelihood-ratio surrogate for MCMC posterior inference.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.data.model_voting_dataset import ModelVotingDataset
 from src.models.model_voting_ratio import ModelVotingRatioClassifier
+from src.sde.model_voting import MODEL_NAMES
 
 
 def roll_negative(batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -25,6 +42,7 @@ def roll_negative(batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.T
 
 
 def batch_loss_and_metrics(model: ModelVotingRatioClassifier, batch: dict[str, torch.Tensor], device: torch.device):
+    """Compute positive/mismatched contrastive loss and global batch metrics."""
     track = batch["track"].to(device)
     params = batch["params"].to(device)
     param_mask = batch["param_mask"].to(device)
@@ -46,6 +64,7 @@ def batch_loss_and_metrics(model: ModelVotingRatioClassifier, batch: dict[str, t
 
 
 def run_epoch(model, loader, optimizer, device, training: bool) -> dict[str, float]:
+    """Run one train or validation epoch and return averaged metrics."""
     model.train(training)
     ctx = torch.enable_grad() if training else torch.no_grad()
     total = {"loss": 0.0, "acc": 0.0, "log_ratio_gap": 0.0}
@@ -68,7 +87,48 @@ def run_epoch(model, loader, optimizer, device, training: bool) -> dict[str, flo
     return {key: value / n for key, value in total.items()}
 
 
+@torch.no_grad()
+def validation_metrics_by_model(model, loader, device) -> dict[str, float]:
+    """Report whether matched/mismatched separation works for each model ID."""
+    model.eval()
+    totals: dict[str, dict[str, float]] = {
+        name: {"acc": 0.0, "gap": 0.0, "n": 0.0}
+        for name in MODEL_NAMES
+    }
+    for batch in loader:
+        if batch["track"].size(0) < 2:
+            continue
+        track = batch["track"].to(device)
+        params = batch["params"].to(device)
+        param_mask = batch["param_mask"].to(device)
+        model_id = batch["model_id"].to(device)
+        condition = batch["condition"].to(device)
+        neg_params, neg_mask, neg_model_id = [x.to(device) for x in roll_negative(batch)]
+        pos_logits = model(track, params, param_mask, model_id, condition)
+        neg_logits = model(track, neg_params, neg_mask, neg_model_id, condition)
+        for mid, name in enumerate(MODEL_NAMES):
+            rows = model_id == mid
+            if not torch.any(rows):
+                continue
+            pos = pos_logits[rows]
+            neg = neg_logits[rows]
+            logits = torch.cat([pos, neg], dim=0)
+            targets = torch.cat([torch.ones_like(pos), torch.zeros_like(neg)], dim=0)
+            acc = ((torch.sigmoid(logits) >= 0.5).float() == targets).float().mean().item()
+            gap = (pos.mean() - neg.mean()).item()
+            totals[name]["acc"] += acc
+            totals[name]["gap"] += gap
+            totals[name]["n"] += 1
+    out: dict[str, float] = {}
+    for name, values in totals.items():
+        n = max(values["n"], 1.0)
+        out[f"val_acc_{name}"] = values["acc"] / n
+        out[f"val_gap_{name}"] = values["gap"] / n
+    return out
+
+
 def main() -> None:
+    """Load data, train the classifier, log history, and save the best checkpoint."""
     parser = argparse.ArgumentParser(description="Train model-voting SBI ratio classifier.")
     parser.add_argument("--data-dir", default="data/model_voting_dataset")
     parser.add_argument("--epochs", type=int, default=100)
@@ -98,13 +158,18 @@ def main() -> None:
     best_path = out_dir / "model_voting_ratio_best.pt"
     best_val = float("inf")
 
+    fieldnames = ["epoch", "train_loss", "train_acc", "train_gap", "val_loss", "val_acc", "val_gap"]
+    for name in MODEL_NAMES:
+        fieldnames.extend([f"val_acc_{name}", f"val_gap_{name}"])
+
     with open(history_path, "w", newline="") as fh:
-        writer = csv.DictWriter(fh, ["epoch", "train_loss", "train_acc", "train_gap", "val_loss", "val_acc", "val_gap"])
+        writer = csv.DictWriter(fh, fieldnames)
         writer.writeheader()
         for epoch in range(1, args.epochs + 1):
             train = run_epoch(model, train_loader, optimizer, device, training=True)
             val = run_epoch(model, val_loader, optimizer, device, training=False)
-            writer.writerow({
+            per_model = validation_metrics_by_model(model, val_loader, device)
+            row = {
                 "epoch": epoch,
                 "train_loss": train["loss"],
                 "train_acc": train["acc"],
@@ -112,7 +177,9 @@ def main() -> None:
                 "val_loss": val["loss"],
                 "val_acc": val["acc"],
                 "val_gap": val["log_ratio_gap"],
-            })
+            }
+            row.update(per_model)
+            writer.writerow(row)
             fh.flush()
             print(
                 f"Epoch {epoch:03d} | train loss {train['loss']:.4f} acc {train['acc']:.2%} "
@@ -134,4 +201,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -1,3 +1,19 @@
+"""
+Generate synthetic tracks for the single-model football OU baseline.
+
+Inputs:
+    - optional real football windows to bootstrap start/end conditions
+    - OU parameter priors from src/sde/football_ou.py
+
+Outputs:
+    - data/football_ou_dataset/dataset.npz with OU tracks, parameters, y0, and
+      target points.
+
+Expected use:
+    This is the older OU baseline workflow. It remains useful as a comparison
+    showing why the final project moved to model voting.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -46,7 +62,7 @@ def load_condition_pool(path: str | Path | None, rng: np.random.Generator, n: in
 
 def main() -> None:
     """
-    Generate the Phase A football OU training dataset.
+    Generate the football OU baseline training dataset.
 
     Lorenz analogue:
         scripts/generate_data.py

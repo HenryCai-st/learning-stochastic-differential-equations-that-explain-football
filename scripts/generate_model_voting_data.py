@@ -1,3 +1,21 @@
+"""
+Generate mixed-model synthetic football trajectories for model-voting SBI.
+
+Inputs:
+    - optional real football windows from extract_football_windows.py
+    - priors for Brownian, constant velocity, OU-to-target, and piecewise
+      velocity models
+
+Outputs:
+    - data/model_voting_dataset/dataset.npz with tracks, model IDs,
+      normalized/padded parameters, masks, conditions, y0/target, and segments.
+
+Expected use:
+    Run this before train_model_voting_ratio.py. If the real windows contain
+    prefix_tracks, synthetic training tracks automatically match that prefix
+    length so training and inference use the same observed duration.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -23,10 +41,18 @@ from src.sde.model_voting import (
 
 
 def load_real_condition_pool(path: str | Path, dt: float, max_segments: int, min_segment_len: int):
+    """Load real-window start/end/segment conditions for synthetic bootstrapping."""
     real = np.load(path, allow_pickle=True)
-    tracks = real["tracks"].astype(np.float32)
-    y0 = real["y0"].astype(np.float32)
-    target = real["target"].astype(np.float32)
+    if "prefix_tracks" in real.files:
+        tracks = real["prefix_tracks"].astype(np.float32)
+        y0 = real["prefix_y0"].astype(np.float32) if "prefix_y0" in real.files else tracks[:, 0]
+        target = real["prefix_target"].astype(np.float32) if "prefix_target" in real.files else tracks[:, -1]
+        source = "real_prefix_bootstrap"
+    else:
+        tracks = real["tracks"].astype(np.float32)
+        y0 = real["y0"].astype(np.float32)
+        target = real["target"].astype(np.float32)
+        source = "real_window_bootstrap"
     change_points = []
     for track in tracks:
         cps = detect_change_points(
@@ -40,10 +66,11 @@ def load_real_condition_pool(path: str | Path, dt: float, max_segments: int, min
         padded = np.zeros(max_segments - 1, dtype=np.int64)
         padded[:min(len(cps), max_segments - 1)] = cps[:max_segments - 1]
         change_points.append(padded)
-    return y0, target, np.asarray(change_points, dtype=np.int64), "real_window_bootstrap"
+    return y0, target, np.asarray(change_points, dtype=np.int64), source, len(tracks[0])
 
 
 def synthetic_condition_pool(n: int, steps: int, rng: np.random.Generator, max_segments: int, min_segment_len: int):
+    """Create fallback random start/end/segment conditions when no real data exists."""
     y0 = np.column_stack([
         rng.uniform(0.0, 105.0, size=n),
         rng.uniform(0.0, 68.0, size=n),
@@ -60,20 +87,25 @@ def synthetic_condition_pool(n: int, steps: int, rng: np.random.Generator, max_s
 
 
 def sample_conditions(n: int, args, rng: np.random.Generator):
+    """Sample condition rows from real windows when possible, otherwise synthetic ones."""
     real_path = Path(args.real_windows)
     if real_path.exists():
-        y0_pool, target_pool, cps_pool, source = load_real_condition_pool(
+        y0_pool, target_pool, cps_pool, source, source_steps = load_real_condition_pool(
             real_path,
             dt=args.dt,
             max_segments=args.max_segments,
             min_segment_len=args.min_segment_len,
         )
+        if args.auto_prefix_steps and source == "real_prefix_bootstrap":
+            args.steps = source_steps
+            args.T = args.steps * args.dt
         idx = rng.choice(len(y0_pool), size=n, replace=True)
         return y0_pool[idx], target_pool[idx], cps_pool[idx], source
     return synthetic_condition_pool(n, args.steps, rng, args.max_segments, args.min_segment_len)
 
 
 def main() -> None:
+    """Generate balanced synthetic tracks for every candidate model family."""
     parser = argparse.ArgumentParser(description="Generate mixed-model synthetic football tracks for model voting.")
     parser.add_argument("--real-windows", default="data/real_football_windows.npz")
     parser.add_argument("--out-dir", default="data/model_voting_dataset")
@@ -83,8 +115,14 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-segments", type=int, default=3)
     parser.add_argument("--min-segment-len", type=int, default=12)
+    parser.add_argument(
+        "--no-auto-prefix-steps",
+        action="store_true",
+        help="Disable automatic use of prefix_steps from real windows.",
+    )
     args = parser.parse_args()
     args.steps = int(round(args.T / args.dt))
+    args.auto_prefix_steps = not args.no_auto_prefix_steps
 
     rng = np.random.default_rng(args.seed)
     all_tracks = []

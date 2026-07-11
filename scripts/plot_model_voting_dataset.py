@@ -1,3 +1,19 @@
+"""
+Visualize diversity in the mixed model-voting synthetic dataset.
+
+Inputs:
+    - data/model_voting_dataset/dataset.npz
+
+Outputs:
+    - track overlays grouped by candidate model family
+    - parameter-prior histograms
+    - trajectory-statistic plots comparing model families
+
+Expected use:
+    Run this after generate_model_voting_data.py to verify that the candidate
+    simulators produce visibly different motion patterns before training.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -13,22 +29,25 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH
-from src.sde.model_voting import MODEL_NAMES
+from src.sde.model_voting import MODEL_NAMES, MODEL_PARAMETER_NAMES
 from src.utils.football_viz import pitch_background
 
 
 def load_dataset(path: str | Path) -> dict[str, np.ndarray]:
+    """Load a model-voting dataset `.npz` into a normal dictionary."""
     data = np.load(path, allow_pickle=True)
     return {key: data[key] for key in data.files}
 
 
 def choose_indices(indices: np.ndarray, max_tracks: int, rng: np.random.Generator) -> np.ndarray:
+    """Choose a subset of row indices without replacement for plotting."""
     if len(indices) <= max_tracks:
         return indices
     return rng.choice(indices, size=max_tracks, replace=False)
 
 
 def plot_tracks_by_model(dataset: dict[str, np.ndarray], max_tracks: int, seed: int, out_path: Path) -> None:
+    """Plot sampled synthetic tracks in a separate panel for each model family."""
     tracks = dataset["tracks"].astype(np.float32)
     model_id = dataset["model_id"].astype(np.int64)
     change_points = dataset.get("change_points")
@@ -71,6 +90,7 @@ def plot_tracks_by_model(dataset: dict[str, np.ndarray], max_tracks: int, seed: 
 
 
 def plot_model_parameter_histograms(dataset: dict[str, np.ndarray], out_path: Path) -> None:
+    """Plot active theta dimensions with model-specific parameter names."""
     parameters = dataset["parameters"].astype(np.float32)
     parameter_mask = dataset["parameter_mask"].astype(np.float32)
     model_id = dataset["model_id"].astype(np.int64)
@@ -84,9 +104,10 @@ def plot_model_parameter_histograms(dataset: dict[str, np.ndarray], out_path: Pa
         params = parameters[rows]
         mask = parameter_mask[rows]
         active_dims = np.where(mask[0] > 0.0)[0] if len(mask) else []
+        parameter_names = MODEL_PARAMETER_NAMES[model_name]
 
         for dim in active_dims:
-            ax.hist(params[:, dim], bins=30, alpha=0.45, label=f"theta_{dim}")
+            ax.hist(params[:, dim], bins=30, alpha=0.45, label=f"theta[{dim}] = {parameter_names[dim]}")
 
         ax.set_title(model_name)
         ax.set_xlabel("parameter value")
@@ -102,6 +123,7 @@ def plot_model_parameter_histograms(dataset: dict[str, np.ndarray], out_path: Pa
 
 
 def plot_displacement_summary(dataset: dict[str, np.ndarray], out_path: Path) -> None:
+    """Compare displacement, speed, and path length across model families."""
     tracks = dataset["tracks"].astype(np.float32)
     model_id = dataset["model_id"].astype(np.int64)
     dt = float(dataset["dt"]) if "dt" in dataset else 0.04
@@ -145,6 +167,7 @@ def plot_displacement_summary(dataset: dict[str, np.ndarray], out_path: Path) ->
 
 
 def main() -> None:
+    """Load the mixed dataset and write all diversity diagnostic plots."""
     parser = argparse.ArgumentParser(description="Visualize the mixed-model football SBI dataset.")
     parser.add_argument("--dataset", default="data/model_voting_dataset/dataset.npz")
     parser.add_argument("--out-dir", default="outputs/model_voting_dataset_viz")

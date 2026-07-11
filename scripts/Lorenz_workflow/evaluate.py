@@ -39,6 +39,7 @@ SIM_COLOR = "#3B8BD4"
 
 
 def sample_ground_truth(rng: np.random.Generator, T: float, dt: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sample one Lorenz parameter vector and simulate its observed trajectory."""
     params = sample_parameters(1, rng)[0].astype(np.float64)
     y0 = np.array([1.0, 1.0, 1.0], dtype=np.float64)
     t_grid = np.arange(0, T + dt, dt)
@@ -47,6 +48,7 @@ def sample_ground_truth(rng: np.random.Generator, T: float, dt: float) -> tuple[
 
 
 def simulate_ensemble(param_samples: np.ndarray, y0: np.ndarray, T: float, dt: float, seed: int, max_tracks: int) -> list[np.ndarray]:
+    """Simulate posterior predictive Lorenz trajectories from sampled parameters."""
     rng = np.random.default_rng(seed)
     t_grid = np.arange(0, T + dt, dt)
     if len(param_samples) > max_tracks:
@@ -56,6 +58,7 @@ def simulate_ensemble(param_samples: np.ndarray, y0: np.ndarray, T: float, dt: f
 
 
 def build_predictive_figure(gt_track: np.ndarray, sim_tracks: list[np.ndarray]) -> go.Figure:
+    """Build a 3D Plotly figure with ground truth and posterior samples."""
     fig = go.Figure()
     for i, sim in enumerate(sim_tracks):
         fig.add_trace(go.Scatter3d(
@@ -118,6 +121,7 @@ def plot_prior_posterior_histograms(
 
 
 def main():
+    """Run Lorenz posterior predictive evaluation and save output figures."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--ratio_ckpt", type=str, default="./checkpoints/ratio_classifier_best.pt")
     parser.add_argument("--data_dir", type=str, default="./data/lorenz_dataset")

@@ -1,3 +1,18 @@
+"""
+Train the single-model football OU baseline ratio classifier.
+
+Inputs:
+    - data/football_ou_dataset/dataset.npz from generate_football_ou_data.py
+
+Outputs:
+    - checkpoints/football_ou_ratio_best.pt
+    - checkpoints/football_ou_ratio_history.csv
+
+Expected use:
+    This script supports the OU baseline comparison. The final model-voting
+    workflow uses train_model_voting_ratio.py instead.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +31,7 @@ from src.models.encoder import TrajectoryEncoder
 
 
 class ConditionedRatioClassifier(nn.Module):
-    """C_phi(track, theta, y0, target) for Phase A football OU SBI."""
+    """C_phi(track, theta, y0, target) for the football OU baseline."""
 
     def __init__(
         self,
@@ -25,6 +40,7 @@ class ConditionedRatioClassifier(nn.Module):
         param_dim: int = 2,
         condition_dim: int = 4,
     ):
+        """Create encoders for theta/condition and the binary classifier head."""
         super().__init__()
         self.encoder = encoder
         self.theta_encoder = nn.Sequential(
@@ -96,6 +112,7 @@ def batch_loss_and_metrics(model, batch, device):
 
 
 def run_epoch(model, loader, optimizer, device, training: bool):
+    """Run one train or validation epoch for the OU baseline classifier."""
     model.train(training)
     ctx = torch.enable_grad() if training else torch.no_grad()
     totals = {"loss": 0.0, "acc": 0.0, "log_ratio_gap": 0.0}

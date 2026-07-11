@@ -12,7 +12,7 @@ PARAMETER_HIGH = np.array([2.50, 4.00], dtype=np.float32)
 
 def sample_ou_parameters(n_samples: int, rng: np.random.Generator) -> np.ndarray:
     """
-    Sample Phase A football OU parameters.
+    Sample football OU baseline parameters.
 
     k is sampled uniformly because it is a relaxation/attraction rate.
     noise_scale is sampled log-uniformly because movement noise can vary over

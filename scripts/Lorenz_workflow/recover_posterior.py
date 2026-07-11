@@ -41,6 +41,7 @@ PARAMETER_NAMES = ["sigma", "rho", "beta", "noise_scale"]
 
 
 def load_ratio_classifier(checkpoint_path: Path, device: torch.device) -> RatioClassifier:
+    """Load a trained Lorenz ratio classifier from disk."""
     encoder = TrajectoryEncoder(feature_dim=256)
     model = RatioClassifier(encoder, feature_dim=256, param_dim=4)
     ckpt = torch.load(checkpoint_path, map_location="cpu")
@@ -75,6 +76,7 @@ def log_prior_physical(theta: np.ndarray) -> float:
 
 @torch.no_grad()
 def log_ratio_for_theta(model, track_t: torch.Tensor, theta_phys: np.ndarray, dataset: SDEDataset, device: torch.device) -> float:
+    """Evaluate the classifier log-ratio for one physical theta value."""
     theta_norm = dataset.normalizer.normalize(theta_phys[None]).astype(np.float32)
     theta_t = torch.from_numpy(theta_norm).to(device)
     return float(model(track_t, theta_t).item())
@@ -132,6 +134,7 @@ def random_walk_metropolis_hastings(
 
 
 def posterior_metrics(pred_mean: np.ndarray, map_theta: np.ndarray, target: np.ndarray) -> dict[str, np.ndarray | float]:
+    """Compute posterior mean/MAP errors against true Lorenz parameters."""
     return {
         "mean_mae_phys": np.abs(pred_mean - target).mean(axis=0),
         "map_mae_phys": np.abs(map_theta - target).mean(axis=0),
@@ -141,6 +144,7 @@ def posterior_metrics(pred_mean: np.ndarray, map_theta: np.ndarray, target: np.n
 
 
 def evaluate_mcmc_recovery(model, loader, dataset, device, args) -> dict[str, np.ndarray | float]:
+    """Run MCMC recovery over validation examples and aggregate metrics."""
     pred_mean, pred_map, target, acc = [], [], [], []
     proposal_scale = np.asarray(args.proposal_scale, dtype=np.float64)
 
@@ -182,6 +186,7 @@ def evaluate_mcmc_recovery(model, loader, dataset, device, args) -> dict[str, np
 
 
 def print_metrics(prefix: str, metrics: dict[str, np.ndarray | float]) -> None:
+    """Print a compact posterior recovery report."""
     print(f"\n{prefix}")
     print(f"  overall posterior-mean MAE(phys): {metrics['overall_mean_mae_phys']:.4f}")
     print(f"  overall MAP MAE(phys):            {metrics['overall_map_mae_phys']:.4f}")
@@ -192,6 +197,7 @@ def print_metrics(prefix: str, metrics: dict[str, np.ndarray | float]) -> None:
 
 
 def main():
+    """Load data/checkpoint, run Lorenz MCMC recovery, and save metrics."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="./data/lorenz_dataset")
     parser.add_argument("--ratio_ckpt", type=str, default="./checkpoints/ratio_classifier_best.pt")

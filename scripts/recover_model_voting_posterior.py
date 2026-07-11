@@ -1,3 +1,21 @@
+"""
+Recover the model-voting posterior with random-walk Metropolis-Hastings.
+
+Inputs:
+    - data/real_football_windows.npz from extract_football_windows.py
+    - checkpoints/model_voting_ratio_best.pt from train_model_voting_ratio.py
+
+Outputs:
+    - outputs/model_voting_posterior/summary.json
+    - outputs/model_voting_posterior/posterior_chains.npz with per-model chains,
+      posterior samples, model vote weights, observed prefix, and future suffix.
+
+Expected use:
+    Run this after training the model-voting ratio classifier. If prefix_tracks
+    are present, inference uses only the observed prefix and does not leak the
+    future suffix.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -25,6 +43,7 @@ from src.sde.model_voting import (
 
 
 def load_checkpoint(path: Path, device: torch.device) -> tuple[ModelVotingRatioClassifier, dict]:
+    """Load the trained model-voting ratio classifier and checkpoint metadata."""
     if not path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {path}. Run train_model_voting_ratio.py first.")
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
@@ -36,20 +55,47 @@ def load_checkpoint(path: Path, device: torch.device) -> tuple[ModelVotingRatioC
 
 
 def checkpoint_array(ckpt: dict, key: str) -> np.ndarray:
+    """Read checkpoint arrays saved as either tensors or NumPy arrays."""
     value = ckpt[key]
     if torch.is_tensor(value):
         return value.detach().cpu().numpy()
     return np.asarray(value)
 
 
+def extrapolated_target_from_prefix(prefix: np.ndarray, suffix_steps: int, dt: float) -> np.ndarray:
+    """Use the last observed prefix velocity as a no-leak future target proxy."""
+    if len(prefix) < 2:
+        return prefix[-1].astype(np.float32)
+    velocity = (prefix[-1] - prefix[-2]) / dt
+    target = prefix[-1] + velocity * dt * max(suffix_steps, 1)
+    target[0] = np.clip(target[0], 0.0, 105.0)
+    target[1] = np.clip(target[1], 0.0, 68.0)
+    return target.astype(np.float32)
+
+
 def load_observed_window(path: Path, window_index: int, dt: float, max_segments: int, min_segment_len: int):
+    """Load one real window and build prefix-only inference condition metadata."""
     if not path.exists():
         raise FileNotFoundError(f"Real windows not found: {path}. Run extract_football_windows.py first.")
     real = np.load(path, allow_pickle=True)
-    track = real["tracks"][window_index].astype(np.float32)
-    y0 = real["y0"][window_index].astype(np.float32)
-    target = real["target"][window_index].astype(np.float32)
     real_dt = float(real["dt"]) if "dt" in real.files else dt
+    full_track = real["tracks"][window_index].astype(np.float32)
+    if "prefix_tracks" in real.files and "suffix_tracks" in real.files:
+        track = real["prefix_tracks"][window_index].astype(np.float32)
+        suffix = real["suffix_tracks"][window_index].astype(np.float32)
+        y0 = track[0].astype(np.float32)
+        target = track[-1].astype(np.float32)
+        prediction_y0 = track[-1].astype(np.float32)
+        prediction_target = extrapolated_target_from_prefix(track, len(suffix), real_dt)
+        protocol = "prefix_suffix"
+    else:
+        track = full_track
+        suffix = np.empty((0, 2), dtype=np.float32)
+        y0 = real["y0"][window_index].astype(np.float32)
+        target = real["target"][window_index].astype(np.float32)
+        prediction_y0 = y0
+        prediction_target = target
+        protocol = "full_window_reconstruction"
     change_points = detect_change_points(
         track,
         dt=real_dt,
@@ -65,10 +111,11 @@ def load_observed_window(path: Path, window_index: int, dt: float, max_segments:
     padded_cps = np.zeros(max_segments - 1, dtype=np.int64)
     padded_cps[:min(len(change_points), max_segments - 1)] = change_points[:max_segments - 1]
     condition = pitch_normalize_condition(y0, target, padded_cps, len(track))
-    return track, y0, target, padded_cps, condition, real_dt
+    return track, full_track, suffix, y0, target, prediction_y0, prediction_target, padded_cps, condition, real_dt, protocol
 
 
 def normalize_track(track: np.ndarray, ckpt: dict) -> np.ndarray:
+    """Normalize an observed track with training-set checkpoint statistics."""
     track_mean = checkpoint_array(ckpt, "track_mean").astype(np.float32)
     track_std = checkpoint_array(ckpt, "track_std").astype(np.float32)
     track_std = np.where(track_std < 1e-8, 1.0, track_std)
@@ -85,6 +132,7 @@ def score_params(
     device: torch.device,
     batch_size: int = 2048,
 ) -> np.ndarray:
+    """Evaluate classifier logits for many candidate parameters of one model."""
     padded, mask = pad_parameters(model_name, params.astype(np.float32))
     params_norm = normalize_padded_parameters(model_name, padded)
     model_id = MODEL_TO_ID[model_name]
@@ -104,6 +152,7 @@ def score_params(
 
 
 def log_prior(model_name: str, theta: np.ndarray) -> float:
+    """Evaluate the model-specific log prior up to an irrelevant constant."""
     spec = MODEL_SPECS[model_name]
     theta = np.asarray(theta, dtype=np.float64)
     if len(theta) != spec.param_dim:
@@ -120,6 +169,7 @@ def log_prior(model_name: str, theta: np.ndarray) -> float:
 
 
 def proposal_scale_for_model(model_name: str) -> np.ndarray:
+    """Choose a simple Gaussian proposal scale for one model's parameter space."""
     spec = MODEL_SPECS[model_name]
     width = spec.high - spec.low
     scale = 0.04 * width
@@ -138,9 +188,11 @@ def run_model_mcmc(
     rng: np.random.Generator,
     device: torch.device,
 ) -> dict[str, np.ndarray | float]:
+    """Run random-walk Metropolis-Hastings for one candidate model family."""
     proposal_scale = proposal_scale_for_model(model_name)
 
     def log_target(theta: np.ndarray) -> float:
+        """Unnormalized log posterior target for one proposed theta."""
         lp = log_prior(model_name, theta)
         if not np.isfinite(lp):
             return -np.inf
@@ -186,12 +238,14 @@ def run_model_mcmc(
 
 
 def softmax(values: np.ndarray) -> np.ndarray:
+    """Convert per-model evidence scores into normalized vote weights."""
     shifted = values - np.max(values)
     exp_values = np.exp(shifted)
     return exp_values / np.sum(exp_values)
 
 
 def main() -> None:
+    """Run per-model MCMC chains and save posterior samples/vote weights."""
     parser = argparse.ArgumentParser(description="Recover p(model, theta | observed track) with model-voting MCMC.")
     parser.add_argument("--real-windows", default="data/real_football_windows.npz")
     parser.add_argument("--checkpoint", default="checkpoints/model_voting_ratio_best.pt")
@@ -211,7 +265,19 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, ckpt = load_checkpoint(Path(args.checkpoint), device)
 
-    track, y0, target, change_points, condition, dt = load_observed_window(
+    (
+        track,
+        full_track,
+        suffix,
+        y0,
+        target,
+        prediction_y0,
+        prediction_target,
+        change_points,
+        condition,
+        dt,
+        protocol,
+    ) = load_observed_window(
         Path(args.real_windows),
         args.window_index,
         args.dt,
@@ -228,18 +294,27 @@ def main() -> None:
     summary: dict[str, object] = {
         "window_index": args.window_index,
         "dt": dt,
+        "protocol": protocol,
         "y0": y0.tolist(),
         "target": target.tolist(),
+        "prediction_y0": prediction_y0.tolist(),
+        "prediction_target": prediction_target.tolist(),
         "change_points": change_points.tolist(),
         "models": {},
     }
     evidence_scores = []
     save_payload: dict[str, np.ndarray] = {
         "observed": track,
+        "full_observed": full_track,
+        "future_suffix": suffix,
         "y0": y0,
         "target": target,
+        "prediction_y0": prediction_y0,
+        "prediction_target": prediction_target,
         "change_points": change_points,
         "condition": condition,
+        "protocol": np.asarray(protocol),
+        "dt": np.asarray(dt, dtype=np.float32),
     }
 
     for model_name in MODEL_NAMES:
