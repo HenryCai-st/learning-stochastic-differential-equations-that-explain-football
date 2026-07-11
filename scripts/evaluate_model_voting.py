@@ -30,7 +30,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH
-from src.sde.model_voting import MODEL_NAMES, MODEL_PARAMETER_NAMES, MODEL_SPECS, simulate_model_batch
+from src.sde.model_voting import MAX_SEGMENTS, MODEL_NAMES, MODEL_PARAMETER_NAMES, MODEL_SPECS, simulate_model_batch
 from src.utils.football_viz import pitch_background
 
 
@@ -70,6 +70,7 @@ def sample_posterior_paths(
     y0 = posterior.get("prediction_y0", posterior["y0"]).astype(np.float32)
     target = posterior.get("prediction_target", posterior["target"]).astype(np.float32)
     change_points = posterior["change_points"].astype(np.int64)
+    observed = posterior["observed"].astype(np.float32)
     weights = posterior["model_vote_weights"].astype(np.float64)
     weights = weights / weights.sum()
 
@@ -84,12 +85,24 @@ def sample_posterior_paths(
         samples = posterior[f"{model_name}_samples"].astype(np.float32)
         sample_idx = rng.choice(len(samples), size=len(rows), replace=True)
         theta = samples[sample_idx]
+        future_change_points = np.full(MAX_SEGMENTS - 1, steps + 1, dtype=np.int64)
+        if model_name == "piecewise_velocity":
+            # The detected change points describe the observed prefix. They are
+            # not future events. Continue the most recent inferred segment and
+            # assume no additional direction change over this short horizon.
+            last_observed_step = len(observed) - 1
+            latest_segment = int(np.sum(last_observed_step >= change_points))
+            latest_segment = int(np.clip(latest_segment, 0, MAX_SEGMENTS - 1))
+            latest_velocity = theta[:, 2 * latest_segment:2 * latest_segment + 2].copy()
+            theta = theta.copy()
+            for segment in range(MAX_SEGMENTS):
+                theta[:, 2 * segment:2 * segment + 2] = latest_velocity
         paths = simulate_model_batch(
             model_name=model_name,
             params=theta,
             y0=np.repeat(y0[None], len(rows), axis=0),
             target=np.repeat(target[None], len(rows), axis=0),
-            change_points=np.repeat(change_points[None], len(rows), axis=0),
+            change_points=np.repeat(future_change_points[None], len(rows), axis=0),
             steps=steps,
             dt=dt,
             rng=rng,
@@ -170,15 +183,15 @@ def plot_model_votes(weights: np.ndarray, out_path: Path) -> None:
             fontsize=9,
         )
     ax.set_xlabel("candidate SDE model family")
-    ax.set_ylabel("posterior model weight")
+    ax.set_ylabel("approximate model weight")
     ax.set_ylim(0.0, max(1.0, float(weights.max()) * 1.15))
-    ax.set_title("Posterior model vote: p(model | observed prefix)")
+    ax.set_title("Approximate model weights from prior-integrated ratio evidence")
     ax.grid(axis="y", alpha=0.25)
     ax.tick_params(axis="x", rotation=0)
     ax.text(
         0.01,
         -0.20,
-        "This figure shows model-family probabilities. Theta distributions are plotted separately.",
+        "Equal model priors; calibration must be checked on fresh synthetic and real windows.",
         transform=ax.transAxes,
         fontsize=8.5,
         color="#444444",
@@ -187,6 +200,28 @@ def plot_model_votes(weights: np.ndarray, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=170, bbox_inches="tight")
     plt.close(fig)
+
+
+def predictive_region_coverage(
+    future_paths: np.ndarray,
+    truth: np.ndarray,
+    levels: tuple[float, ...] = (0.5, 0.8, 0.9),
+) -> dict[str, dict[str, float | bool]]:
+    """Measure pointwise radial predictive-region coverage around the sample mean."""
+    center = future_paths.mean(axis=0)
+    sample_radius = np.linalg.norm(future_paths - center[None], axis=2)
+    truth_radius = np.linalg.norm(truth - center, axis=1)
+    result: dict[str, dict[str, float | bool]] = {}
+    for level in levels:
+        radius = np.quantile(sample_radius, level, axis=0)
+        covered = truth_radius <= radius
+        result[f"{int(level * 100)}pct"] = {
+            "time_fraction_covered": float(covered.mean()),
+            "endpoint_covered": bool(covered[-1]),
+            "mean_radius_m": float(radius.mean()),
+            "endpoint_radius_m": float(radius[-1]),
+        }
+    return result
 
 
 def plot_winning_parameter_histograms(posterior: dict[str, np.ndarray], winning_model: str, out_path: Path) -> None:
@@ -256,9 +291,28 @@ def main() -> None:
     target_end = future_suffix[-1] if len(future_suffix) > 0 else observed[-1]
     endpoint_error = np.linalg.norm(endpoints - target_end[None], axis=1)
     if len(future_suffix) > 0 and paths.shape[1] == len(future_suffix) + 1:
-        path_error = np.sqrt(((paths[:, 1:] - future_suffix[None]) ** 2).sum(axis=2)).mean(axis=1)
+        future_paths = paths[:, 1:]
+        point_error = np.linalg.norm(future_paths - future_suffix[None], axis=2)
+        path_error = point_error.mean(axis=1)
+        final_error = point_error[:, -1]
+        predictive_mean = future_paths.mean(axis=0)
+        mean_path_point_error = np.linalg.norm(predictive_mean - future_suffix, axis=1)
+        forecast_metrics = {
+            "ade_predictive_mean_m": float(mean_path_point_error.mean()),
+            "fde_predictive_mean_m": float(mean_path_point_error[-1]),
+            "min_ade_over_samples_m": float(path_error.min()),
+            "min_fde_over_samples_m": float(final_error.min()),
+        }
+        coverage = predictive_region_coverage(future_paths, future_suffix)
     else:
         path_error = np.full(len(paths), np.nan, dtype=np.float32)
+        forecast_metrics = {
+            "ade_predictive_mean_m": None,
+            "fde_predictive_mean_m": None,
+            "min_ade_over_samples_m": None,
+            "min_fde_over_samples_m": None,
+        }
+        coverage = {}
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -272,6 +326,8 @@ def main() -> None:
         "n_paths": args.n_paths,
         "winning_model": winning_model,
         "protocol": scalar_string(posterior.get("protocol")),
+        "model_weight_method": scalar_string(posterior.get("model_weight_method"), "prior_mc_ratio_evidence"),
+        "model_weight_status": scalar_string(posterior.get("model_weight_status"), "approximate"),
         "model_vote_weights": {name: float(weight) for name, weight in zip(MODEL_NAMES, weights)},
         "sampled_model_counts": {
             name: int(np.sum(sampled_model_ids == i))
@@ -287,6 +343,12 @@ def main() -> None:
             "p10": None if np.isnan(path_error).all() else float(np.nanquantile(path_error, 0.10)),
             "p90": None if np.isnan(path_error).all() else float(np.nanquantile(path_error, 0.90)),
         },
+        "forecast_metrics": forecast_metrics,
+        "predictive_region_coverage": coverage,
+        "coverage_note": (
+            "Coverage is pointwise radial coverage for this one held-out suffix; "
+            "calibration requires aggregation over many independent windows."
+        ),
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     np.savez_compressed(

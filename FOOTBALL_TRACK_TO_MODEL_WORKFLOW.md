@@ -1,7 +1,9 @@
 # Football Tracks To SBI Model Workflow
 
-This document explains how real football tracking data should be fitted into
-the current encoder/contrastive/SBI model.
+This document explains the older single-model OU baseline and how real football
+ball tracking data enters the encoder/contrastive/SBI code. The active final
+scope is ball movement only, and the active multi-model run order is maintained
+in `README.md` and `SBI_MODEL_VOTING_IMPLEMENTATION_TASKS.md`.
 
 The short answer:
 
@@ -467,7 +469,8 @@ visualize_tracking_frame()
 - The target is currently the end point of the window.
 - Real tracks do not provide true SDE parameters, so evaluation is visual and
   posterior-predictive, not parameter-MAE.
-- Full player behavior needs Phase B or social force later.
+- This baseline is retained only as a comparison with the active model-voting
+  ball workflow.
 
 ## 7. Next Improvements
 
@@ -479,7 +482,7 @@ theta = (k, damping, noise_scale)
 condition = (y0, target, v0)
 ```
 
-2. Use ball position as target for player movement instead of window end point.
-3. Add model selection across Brownian, OU, CRW, and social force.
-4. Replace candidate-grid scoring with MCMC after the conditioned classifier is
-   trained.
+2. Evaluate model selection across Brownian, OU, constant velocity, and
+   piecewise velocity on fresh synthetic ball tracks.
+3. Calibrate model evidence and parameter intervals over many windows.
+4. Compare ball forecasts against stationary and last-velocity baselines.

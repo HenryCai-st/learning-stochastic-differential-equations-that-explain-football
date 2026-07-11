@@ -2,8 +2,11 @@
 
 ## 1. Final Project Direction
 
-The final project should not rely on one fixed motion model such as OU. The
-observed football-ball trajectories are often piecewise and event-driven:
+The agreed final scope is the movement and probabilistic prediction of the
+**football ball only**. Player trajectories, player roles, teammates, and
+opponents are not part of this implementation. The project should not rely on
+one fixed motion model such as OU. Observed ball trajectories are often
+piecewise and event-driven:
 
 ```text
 straight segment -> sharp turn -> straight segment -> stop/deflection
@@ -70,12 +73,20 @@ python scripts\recover_model_voting_posterior.py `
   --window-index 0 `
   --mcmc-steps 3000 `
   --burn-in 800 `
+  --n-evidence-samples 4096 `
   --out-dir outputs\model_voting_posterior
 
 python scripts\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
+
+python scripts\evaluate_synthetic_model_recovery.py `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --dataset data\model_voting_dataset\dataset.npz `
+  --n-cases 80 `
+  --n-evidence-samples 512 `
+  --out-dir outputs\synthetic_model_recovery
 
 python scripts\football_model_voting_clip.py `
   --game data\Sample_Game_1 `
@@ -329,10 +340,10 @@ Practical implementation:
 
 ```text
 for each model:
-    run MCMC over theta for that model
-    collect posterior samples
-    compute model score / evidence proxy
-normalize model scores into model votes
+    sample theta from its prior
+    estimate marginal evidence ratio with log-mean-exp of classifier logits
+    run MCMC over theta for the parameter posterior
+normalize evidence ratios into model probabilities using equal model priors
 ```
 
 Tasks:
@@ -342,7 +353,7 @@ Tasks:
 - [x] Implement random-walk Metropolis-Hastings per model.
 - [x] Store chains per model.
 - [x] Compute acceptance rate per model.
-- [x] Compute model vote weights.
+- [x] Compute model vote weights using prior Monte Carlo evidence integration.
 - [x] Save posterior samples and model scores.
 
 Implemented output:
@@ -380,7 +391,8 @@ Tasks:
 - [x] Plot future endpoint density.
 - [x] Plot model posterior/vote bar chart.
 - [x] Plot parameter histograms for the winning model.
-- [x] Report coverage metrics if a future suffix is held out.
+- [x] Report single-window radial predictive-region coverage if a suffix is held out.
+- [ ] Aggregate coverage over many independent windows to assess calibration.
 
 Implemented output:
 
@@ -416,8 +428,39 @@ Tasks:
 - [x] Condition inference on prefix only.
 - [x] Evaluate predictive distribution against suffix.
 - [x] Do not leak endpoint unless the task is explicitly reconstruction.
+- [x] Keep the OU target condition consistent between inference and prediction.
+- [x] Do not reuse historical change-point timestamps as future events.
+- [ ] Learn or sample future change-point times instead of assuming no future turn.
 
-## 10. Presentation Story
+Current conservative future assumptions:
+
+```text
+OU target               = last observed ball position
+constant velocity       = continue inferred velocity
+piecewise velocity      = continue latest inferred segment
+future direction change = none within the short forecast horizon
+```
+
+## 10. Validation Required Before Final Claims
+
+The end-to-end demo is implemented, but a scientifically defensible result
+requires tests on data where the generating truth is known and tests across
+more than one real window.
+
+Tasks:
+
+- [x] Generate fresh synthetic test cases not copied from classifier training rows.
+- [x] Report a true-model versus selected-model confusion matrix.
+- [x] Report top-1 model recovery accuracy and mean model log score.
+- [ ] Run MCMC on synthetic examples with known theta.
+- [ ] Report parameter bias, interval width, and 50/80/90% posterior coverage.
+- [ ] Extract evaluation windows from both Sample_Game_1 and Sample_Game_2.
+- [ ] Report aggregate ADE, FDE, and predictive-region coverage.
+- [ ] Compare against stationary, last-velocity, and empirical-noise baselines.
+- [ ] Repeat evidence estimation with multiple random seeds to measure Monte
+      Carlo variability.
+
+## 11. Presentation Story
 
 Use the current OU failure as motivation:
 
