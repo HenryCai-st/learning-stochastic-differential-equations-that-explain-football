@@ -19,6 +19,15 @@ class ModelVotingDataset(Dataset):
         self.model_id = loaded["model_id"].astype(np.int64)
         self.conditions = loaded["conditions"].astype(np.float32)
         self.model_names = loaded["model_names"].tolist()
+        self.steps = int(loaded["steps"]) if "steps" in loaded.files else int(self.tracks.shape[1])
+        self.dt = float(loaded["dt"]) if "dt" in loaded.files else None
+        self.T = float(loaded["T"]) if "T" in loaded.files else None
+        self.seed = int(loaded["seed"]) if "seed" in loaded.files else None
+        self.condition_sources = (
+            str(loaded["condition_sources"].item())
+            if "condition_sources" in loaded.files
+            else None
+        )
 
         self.track_mean = self.tracks.mean(axis=(0, 1)).astype(np.float32)
         self.track_std = self.tracks.std(axis=(0, 1)).astype(np.float32)
@@ -36,4 +45,3 @@ class ModelVotingDataset(Dataset):
             "model_id": torch.tensor(self.model_id[idx], dtype=torch.long),
             "condition": torch.from_numpy(self.conditions[idx]),
         }
-

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from src.sde.football_ou import PARAMETER_HIGH, PARAMETER_LOW, pitch_normalize_xy
+from src.simulators.ou import PARAMETER_HIGH, PARAMETER_LOW, pitch_normalize_xy
 
 
 class OUParameterNormalizer:

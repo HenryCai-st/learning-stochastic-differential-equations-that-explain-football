@@ -27,9 +27,10 @@ from torch.utils.data import DataLoader, random_split
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.data.model_voting_dataset import ModelVotingDataset
-from src.models.model_voting_ratio import ModelVotingRatioClassifier
-from src.sde.model_voting import MODEL_NAMES
+from src.synthetic.dataset import ModelVotingDataset
+from src.sbi.artifacts import checkpoint_metadata, dataset_contract, write_run_metadata
+from src.sbi.ratio_model import ModelVotingRatioClassifier
+from src.simulators.model_voting import MODEL_NAMES
 
 
 def roll_negative(batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -195,8 +196,19 @@ def main() -> None:
                     "model_names": dataset.model_names,
                     "data_dir": args.data_dir,
                     "best_val_loss": best_val,
+                    "artifact_metadata": checkpoint_metadata(dataset, args),
                 }, best_path)
                 print(f"  -> saved {best_path}")
+
+    write_run_metadata(
+        out_dir / "run_metadata.json",
+        stage="ratio_classifier_training",
+        args=args,
+        inputs={"dataset": Path(args.data_dir) / "dataset.npz"},
+        outputs={"checkpoint": best_path, "history": history_path},
+        contract=dataset_contract(dataset),
+        results={"best_val_loss": best_val},
+    )
 
 
 if __name__ == "__main__":

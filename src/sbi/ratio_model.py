@@ -3,8 +3,8 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from src.models.encoder import TrajectoryEncoder
-from src.sde.model_voting import CONDITION_DIM, MAX_PARAM_DIM, MODEL_NAMES
+from src.sbi.encoder import TrajectoryEncoder
+from src.simulators.model_voting import CONDITION_DIM, MAX_PARAM_DIM, MODEL_NAMES
 
 
 class ModelVotingRatioClassifier(nn.Module):
@@ -62,4 +62,3 @@ class ModelVotingRatioClassifier(nn.Module):
         z_condition = self.condition_encoder(condition)
         features = torch.cat([z_track, z_model, z_theta, z_condition], dim=1)
         return self.classifier(features).squeeze(-1)
-

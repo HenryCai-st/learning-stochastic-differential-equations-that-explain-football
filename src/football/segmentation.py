@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.data.trajectory_features import trajectory_feature_dict
+from src.football.features import trajectory_feature_dict
 
 
 def enforce_min_segment_length(change_points: list[int], steps: int, min_len: int) -> list[int]:
@@ -102,4 +102,3 @@ def estimate_segment_velocities(track: np.ndarray, change_points: np.ndarray, dt
     while len(velocities) < max_segments:
         velocities.append(velocities[-1].copy() if velocities else np.zeros(2, dtype=np.float32))
     return np.stack(velocities[:max_segments]).astype(np.float32)
-

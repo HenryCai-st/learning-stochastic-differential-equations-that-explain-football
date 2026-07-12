@@ -29,9 +29,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH
-from src.sde.model_voting import MAX_SEGMENTS, MODEL_NAMES, MODEL_PARAMETER_NAMES, MODEL_SPECS, simulate_model_batch
-from src.utils.football_viz import pitch_background
+from src.simulators.ou import PITCH_LENGTH, PITCH_WIDTH
+from src.simulators.model_voting import MAX_SEGMENTS, MODEL_NAMES, MODEL_PARAMETER_NAMES, MODEL_SPECS, simulate_model_batch
+from src.football.visualization import pitch_background
+from src.sbi.artifacts import write_run_metadata
 
 
 MODEL_DISPLAY_NAMES = {
@@ -359,6 +360,18 @@ def main() -> None:
         sampled_model_ids=sampled_model_ids,
         endpoint_error=endpoint_error,
         path_error=path_error,
+    )
+    write_run_metadata(
+        out_dir / "run_metadata.json",
+        stage="football_forecast_evaluation",
+        args=args,
+        inputs={"posterior": args.posterior},
+        outputs={
+            "summary": out_dir / "summary.json",
+            "samples": out_dir / "posterior_predictive_samples.npz",
+        },
+        contract={"steps": steps, "dt": args.dt, "protocol": summary["protocol"]},
+        results=summary,
     )
     print(json.dumps(summary, indent=2))
     print(f"Saved model-voting evaluation outputs to {out_dir}")

@@ -28,38 +28,16 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.data.segmentation import detect_change_points, fixed_even_change_points
-from src.models.model_voting_ratio import ModelVotingRatioClassifier
-from src.sde.model_voting import (
-    MAX_PARAM_DIM,
+from src.football.segmentation import detect_change_points, fixed_even_change_points
+from src.sbi.artifacts import validate_checkpoint_contract, write_run_metadata
+from src.sbi.evidence import logmeanexp, softmax
+from src.sbi.mcmc import run_model_mcmc
+from src.sbi.scoring import load_checkpoint, normalize_track, score_params
+from src.simulators.model_voting import (
     MODEL_NAMES,
-    MODEL_SPECS,
-    MODEL_TO_ID,
-    normalize_padded_parameters,
-    pad_parameters,
     pitch_normalize_condition,
     sample_model_parameters,
 )
-
-
-def load_checkpoint(path: Path, device: torch.device) -> tuple[ModelVotingRatioClassifier, dict]:
-    """Load the trained model-voting ratio classifier and checkpoint metadata."""
-    if not path.exists():
-        raise FileNotFoundError(f"Checkpoint not found: {path}. Run train_model_voting_ratio.py first.")
-    ckpt = torch.load(path, map_location="cpu", weights_only=False)
-    model = ModelVotingRatioClassifier()
-    model.load_state_dict(ckpt["model_state_dict"])
-    model.to(device)
-    model.eval()
-    return model, ckpt
-
-
-def checkpoint_array(ckpt: dict, key: str) -> np.ndarray:
-    """Read checkpoint arrays saved as either tensors or NumPy arrays."""
-    value = ckpt[key]
-    if torch.is_tensor(value):
-        return value.detach().cpu().numpy()
-    return np.asarray(value)
 
 
 def load_observed_window(path: Path, window_index: int, dt: float, max_segments: int, min_segment_len: int):
@@ -105,143 +83,6 @@ def load_observed_window(path: Path, window_index: int, dt: float, max_segments:
     padded_cps[:min(len(change_points), max_segments - 1)] = change_points[:max_segments - 1]
     condition = pitch_normalize_condition(y0, target, padded_cps, len(track))
     return track, full_track, suffix, y0, target, prediction_y0, prediction_target, padded_cps, condition, real_dt, protocol
-
-
-def normalize_track(track: np.ndarray, ckpt: dict) -> np.ndarray:
-    """Normalize an observed track with training-set checkpoint statistics."""
-    track_mean = checkpoint_array(ckpt, "track_mean").astype(np.float32)
-    track_std = checkpoint_array(ckpt, "track_std").astype(np.float32)
-    track_std = np.where(track_std < 1e-8, 1.0, track_std)
-    return ((track - track_mean) / track_std).astype(np.float32)
-
-
-@torch.no_grad()
-def score_params(
-    model: ModelVotingRatioClassifier,
-    track_t: torch.Tensor,
-    condition_t: torch.Tensor,
-    model_name: str,
-    params: np.ndarray,
-    device: torch.device,
-    batch_size: int = 2048,
-) -> np.ndarray:
-    """Evaluate classifier logits for many candidate parameters of one model."""
-    padded, mask = pad_parameters(model_name, params.astype(np.float32))
-    params_norm = normalize_padded_parameters(model_name, padded)
-    model_id = MODEL_TO_ID[model_name]
-    outputs: list[np.ndarray] = []
-    for start in range(0, len(params), batch_size):
-        end = start + batch_size
-        n = len(params_norm[start:end])
-        logits = model(
-            track_t.repeat(n, 1, 1),
-            torch.from_numpy(params_norm[start:end]).to(device),
-            torch.from_numpy(mask[start:end]).to(device),
-            torch.full((n,), model_id, dtype=torch.long, device=device),
-            condition_t.repeat(n, 1),
-        )
-        outputs.append(logits.cpu().numpy())
-    return np.concatenate(outputs)
-
-
-def log_prior(model_name: str, theta: np.ndarray) -> float:
-    """Evaluate the model-specific log prior up to an irrelevant constant."""
-    spec = MODEL_SPECS[model_name]
-    theta = np.asarray(theta, dtype=np.float64)
-    if len(theta) != spec.param_dim:
-        return -np.inf
-    if np.any(theta < spec.low) or np.any(theta > spec.high):
-        return -np.inf
-    logp = 0.0
-    for value, is_log in zip(theta, spec.log_scale):
-        if is_log:
-            if value <= 0.0:
-                return -np.inf
-            logp -= float(np.log(value))
-    return logp
-
-
-def proposal_scale_for_model(model_name: str) -> np.ndarray:
-    """Choose a simple Gaussian proposal scale for one model's parameter space."""
-    spec = MODEL_SPECS[model_name]
-    width = spec.high - spec.low
-    scale = 0.04 * width
-    scale = np.where(spec.log_scale, np.maximum(scale, 0.08), scale)
-    return scale.astype(np.float64)
-
-
-def run_model_mcmc(
-    model: ModelVotingRatioClassifier,
-    track_t: torch.Tensor,
-    condition_t: torch.Tensor,
-    model_name: str,
-    initial_theta: np.ndarray,
-    n_steps: int,
-    burn_in: int,
-    rng: np.random.Generator,
-    device: torch.device,
-) -> dict[str, np.ndarray | float]:
-    """Run random-walk Metropolis-Hastings for one candidate model family."""
-    proposal_scale = proposal_scale_for_model(model_name)
-
-    def log_target(theta: np.ndarray) -> float:
-        """Unnormalized log posterior target for one proposed theta."""
-        lp = log_prior(model_name, theta)
-        if not np.isfinite(lp):
-            return -np.inf
-        logit = score_params(
-            model=model,
-            track_t=track_t,
-            condition_t=condition_t,
-            model_name=model_name,
-            params=theta[None].astype(np.float32),
-            device=device,
-            batch_size=1,
-        )[0]
-        return float(lp + logit)
-
-    current = initial_theta.astype(np.float64).copy()
-    current_logp = log_target(current)
-    chain = np.zeros((n_steps, len(current)), dtype=np.float32)
-    logp = np.zeros(n_steps, dtype=np.float32)
-    accepted = 0
-
-    for step in range(n_steps):
-        proposal = current + rng.normal(0.0, proposal_scale, size=len(current))
-        proposal_logp = log_target(proposal)
-        if np.log(rng.uniform()) < proposal_logp - current_logp:
-            current = proposal
-            current_logp = proposal_logp
-            accepted += 1
-        chain[step] = current
-        logp[step] = current_logp
-
-    samples = chain[burn_in:]
-    sample_logp = logp[burn_in:]
-    return {
-        "chain": chain,
-        "logp": logp,
-        "samples": samples,
-        "map": samples[int(np.argmax(sample_logp))],
-        "posterior_mean": samples.mean(axis=0),
-        "acceptance_rate": accepted / max(1, n_steps),
-        "mean_logp": float(sample_logp.mean()),
-        "max_logp": float(sample_logp.max()),
-    }
-
-
-def softmax(values: np.ndarray) -> np.ndarray:
-    """Convert per-model evidence scores into normalized vote weights."""
-    shifted = values - np.max(values)
-    exp_values = np.exp(shifted)
-    return exp_values / np.sum(exp_values)
-
-
-def logmeanexp(values: np.ndarray) -> float:
-    """Stable log of the arithmetic mean of exp(values)."""
-    values = np.asarray(values, dtype=np.float64)
-    maximum = float(np.max(values))
-    return maximum + float(np.log(np.mean(np.exp(values - maximum))))
 
 
 def main() -> None:
@@ -290,6 +131,7 @@ def main() -> None:
         args.max_segments,
         args.min_segment_len,
     )
+    validate_checkpoint_contract(ckpt, steps=len(track), dt=dt)
     track_norm = normalize_track(track, ckpt)
     track_t = torch.from_numpy(track_norm.T[None]).float().to(device)
     condition_t = torch.from_numpy(condition[None]).float().to(device)
@@ -379,6 +221,15 @@ def main() -> None:
 
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     np.savez_compressed(out_dir / "posterior_chains.npz", **save_payload)
+    write_run_metadata(
+        out_dir / "run_metadata.json",
+        stage="football_posterior_recovery",
+        args=args,
+        inputs={"real_windows": args.real_windows, "checkpoint": args.checkpoint},
+        outputs={"summary": out_dir / "summary.json", "posterior": out_dir / "posterior_chains.npz"},
+        contract={"steps": len(track), "dt": dt, "protocol": protocol},
+        results={"model_vote_weights": summary["model_vote_weights"]},
+    )
     print(json.dumps(summary, indent=2))
     print(f"Saved model-voting posterior outputs to {out_dir}")
 

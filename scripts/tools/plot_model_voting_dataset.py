@@ -28,9 +28,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH
-from src.sde.model_voting import MODEL_NAMES, MODEL_PARAMETER_NAMES
-from src.utils.football_viz import pitch_background
+from src.simulators.ou import PITCH_LENGTH, PITCH_WIDTH
+from src.simulators.model_voting import MODEL_NAMES, MODEL_PARAMETER_NAMES
+from src.football.visualization import pitch_background
 
 
 def load_dataset(path: str | Path) -> dict[str, np.ndarray]:

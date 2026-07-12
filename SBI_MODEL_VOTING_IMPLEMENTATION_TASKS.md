@@ -38,7 +38,7 @@ posterior predictive distribution
 Current implemented run order:
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -50,7 +50,7 @@ python scripts\model_voting_pipeline\extract_football_windows.py `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
-python scripts\model_voting_pipeline\generate_model_voting_data.py `
+python scripts\football_case_study\generate_model_voting_data.py `
   --real-windows data\real_football_windows.npz `
   --n-per-model 1000 `
   --T 5.0 `
@@ -61,13 +61,13 @@ python scripts\tools\plot_model_voting_dataset.py `
   --dataset data\model_voting_dataset\dataset.npz `
   --out-dir outputs\model_voting_dataset_viz
 
-python scripts\model_voting_pipeline\train_model_voting_ratio.py `
+python scripts\football_case_study\train_model_voting_ratio.py `
   --data-dir data\model_voting_dataset `
   --epochs 100 `
   --batch-size 128 `
   --out-dir checkpoints
 
-python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
+python scripts\football_case_study\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --window-index 0 `
@@ -76,12 +76,12 @@ python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
   --n-evidence-samples 4096 `
   --out-dir outputs\model_voting_posterior
 
-python scripts\model_voting_pipeline\evaluate_model_voting.py `
+python scripts\football_case_study\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
 
-python scripts\model_voting_pipeline\evaluate_synthetic_model_recovery.py `
+python scripts\method_validation\evaluate_synthetic_model_recovery.py `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --dataset data\model_voting_dataset\dataset.npz `
   --n-cases 80 `
@@ -148,6 +148,28 @@ each SDE family, scores them with the learned classifier, and displays a live
 soft vote over Brownian, constant-velocity, OU-target, and piecewise-velocity
 models beside the pitch.
 
+## Project Structure And Artifact Contracts
+
+The project is separated into controlled method validation and a football case
+study. Detailed ownership and the forward roadmap live in
+`PROJECT_RESTRUCTURE_PLAN.md`.
+
+- [x] Separate shared SBI code from football data adapters.
+- [x] Move candidate simulators and priors to `src/simulators/`.
+- [x] Move football tracking and preprocessing to `src/football/`.
+- [x] Move synthetic dataset adapters to `src/synthetic/`.
+- [x] Split active commands into `scripts/method_validation/` and
+      `scripts/football_case_study/`.
+- [x] Extract evidence, checkpoint scoring, and MCMC into `src/sbi/`.
+- [x] Embed schema, Git commit, arguments, priors, and data contracts in new
+      datasets and checkpoints.
+- [x] Write per-stage run metadata and reject checkpoint/data protocol
+      mismatches.
+
+This migration preserves the existing numerical behavior. A fully
+football-independent synthetic condition generator is the next method
+validation feature, not part of this structural change.
+
 ## 2. Candidate Models For Model Voting
 
 Implement several candidate simulators. Each model must expose:
@@ -210,7 +232,7 @@ turn angle    angle(v_t, v_{t-1})
 
 Tasks:
 
-- [x] Add `src/data/trajectory_features.py`.
+- [x] Add `src/football/features.py`.
 - [x] Implement finite-difference velocity.
 - [x] Implement speed and acceleration.
 - [x] Implement heading and turn-angle features.
@@ -234,7 +256,7 @@ Simple first algorithm:
 
 Tasks:
 
-- [x] Add `src/data/segmentation.py`.
+- [x] Add `src/football/segmentation.py`.
 - [x] Implement angle-threshold segmentation.
 - [x] Implement minimum segment length.
 - [x] Implement fixed-K segmentation fallback.
@@ -252,7 +274,7 @@ scripts/OU_workflow/generate_football_ou_data.py
 New model-voting generator should create a mixed dataset:
 
 ```text
-scripts/model_voting_pipeline/generate_model_voting_data.py
+scripts/football_case_study/generate_model_voting_data.py
 ```
 
 Dataset keys:
@@ -281,8 +303,8 @@ Tasks:
 Implemented files:
 
 ```text
-src/sde/model_voting.py
-scripts/model_voting_pipeline/generate_model_voting_data.py
+src/simulators/model_voting.py
+scripts/football_case_study/generate_model_voting_data.py
 scripts/tools/plot_model_voting_dataset.py
 ```
 
@@ -313,7 +335,7 @@ binary classifier head
 
 Tasks:
 
-- [x] Add `src/models/model_voting_ratio.py`.
+- [x] Add `src/sbi/ratio_model.py`.
 - [x] Support variable parameter dimensions via padding + mask.
 - [x] Add model one-hot or model embedding.
 - [x] Keep y0/target/segment conditions attached to the track.
@@ -323,9 +345,9 @@ Tasks:
 Implemented files:
 
 ```text
-src/data/model_voting_dataset.py
-src/models/model_voting_ratio.py
-scripts/model_voting_pipeline/train_model_voting_ratio.py
+src/synthetic/dataset.py
+src/sbi/ratio_model.py
+scripts/football_case_study/train_model_voting_ratio.py
 ```
 
 ## 7. MCMC Posterior Inference
@@ -348,7 +370,7 @@ normalize evidence ratios into model probabilities using equal model priors
 
 Tasks:
 
-- [x] Add `scripts/model_voting_pipeline/recover_model_voting_posterior.py`.
+- [x] Add `scripts/football_case_study/recover_model_voting_posterior.py`.
 - [x] Implement model-specific priors.
 - [x] Implement random-walk Metropolis-Hastings per model.
 - [x] Store chains per model.
@@ -385,7 +407,7 @@ Render:
 
 Tasks:
 
-- [x] Add `scripts/model_voting_pipeline/evaluate_model_voting.py`.
+- [x] Add `scripts/football_case_study/evaluate_model_voting.py`.
 - [x] Plot observed prefix and true future suffix separately.
 - [x] Plot sampled future paths.
 - [x] Plot future endpoint density.
@@ -431,10 +453,10 @@ Tasks:
 The recommended implementation is integrated into:
 
 ```text
-scripts/model_voting_pipeline/extract_football_windows.py
-scripts/model_voting_pipeline/generate_model_voting_data.py
-scripts/model_voting_pipeline/recover_model_voting_posterior.py
-scripts/model_voting_pipeline/evaluate_model_voting.py
+scripts/football_case_study/extract_football_windows.py
+scripts/football_case_study/generate_model_voting_data.py
+scripts/football_case_study/recover_model_voting_posterior.py
+scripts/football_case_study/evaluate_model_voting.py
 ```
 
 Integrated data contract:
@@ -526,7 +548,7 @@ python scripts\tools\plot_real_window_segments.py `
 # Model-voting posterior figures:
 # model_vote_weights.png, winning_model_parameter_histograms.png,
 # endpoint_density.png, posterior_predictive_paths.png.
-python scripts\model_voting_pipeline\evaluate_model_voting.py `
+python scripts\football_case_study\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation

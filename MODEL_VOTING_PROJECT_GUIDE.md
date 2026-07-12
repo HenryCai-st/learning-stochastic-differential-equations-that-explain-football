@@ -28,6 +28,17 @@ where:
 Player roles, teammates, opponents, and tactical context are outside the
 current project scope.
 
+The overall project now has two parts. Controlled synthetic method validation
+is the primary scientific result; this guide focuses on the second part, the
+football case study and its current runnable workflow. See
+`PROJECT_RESTRUCTURE_PLAN.md` for the boundary, completed structural migration,
+artifact metadata contract, and next implementation stages.
+
+New datasets, checkpoints, and result directories record their Git commit,
+arguments, simulator priors, trajectory contract, and runtime metadata. A
+checkpoint is rejected when its trajectory length, `dt`, or model list does
+not match the evaluation input.
+
 ## 2. The Whole Picture Without Code
 
 The real tracking data contains ball positions but no correct SDE label and no
@@ -128,7 +139,8 @@ deep-learning-lab/
 |   `-- model_voting_ratio_history.csv
 |
 |-- scripts/
-|   |-- model_voting_pipeline/       required end-to-end pipeline stages
+|   |-- method_validation/           controlled synthetic evaluation
+|   |-- football_case_study/         football extraction and forecasting
 |   |-- tools/                       optional visualization/inspection tools
 |   |-- OU_workflow/                 historical single-model baseline
 |   `-- Lorenz_workflow/             historical Lorenz demonstration
@@ -147,7 +159,7 @@ deep-learning-lab/
 `-- OU_BASELINE_WORKFLOW.md           historical OU documentation
 ```
 
-The active model-voting workflow uses `src/sde/football_ou.py` for the OU
+The active model-voting workflow uses `src/simulators/ou.py` for the OU
 candidate simulator. Therefore that source module remains active even though
 the old standalone OU scripts are archived under `scripts/OU_workflow`.
 
@@ -157,12 +169,12 @@ Required model-voting pipeline:
 
 | Order | Script | Role |
 |---:|---|---|
-| 1 | `model_voting_pipeline/extract_football_windows.py` | Create real prefix/suffix windows. |
-| 2 | `model_voting_pipeline/generate_model_voting_data.py` | Simulate labelled training data. |
-| 3 | `model_voting_pipeline/train_model_voting_ratio.py` | Train the ratio classifier. |
-| 4 | `model_voting_pipeline/evaluate_synthetic_model_recovery.py` | Validate model selection on fresh simulations. |
-| 5 | `model_voting_pipeline/recover_model_voting_posterior.py` | Run evidence estimation and MCMC on a real prefix. |
-| 6 | `model_voting_pipeline/evaluate_model_voting.py` | Evaluate future paths, errors, and coverage. |
+| 1 | `football_case_study/extract_football_windows.py` | Create real prefix/suffix windows. |
+| 2 | `football_case_study/generate_model_voting_data.py` | Simulate labelled football-adapted training data. |
+| 3 | `football_case_study/train_model_voting_ratio.py` | Train the ratio classifier. |
+| 4 | `method_validation/evaluate_synthetic_model_recovery.py` | Validate model selection on fresh simulations. |
+| 5 | `football_case_study/recover_model_voting_posterior.py` | Run evidence estimation and MCMC on a real prefix. |
+| 6 | `football_case_study/evaluate_model_voting.py` | Evaluate future paths, errors, and coverage. |
 
 Complementary tools, not required for training or MCMC:
 
@@ -246,7 +258,7 @@ root. Do not run them from inside `scripts`.
 ### Step 1: Extract A Real Five-Second Window
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -274,7 +286,7 @@ python scripts\tools\plot_real_window_segments.py `
 ### Step 2: Generate Synthetic SBI Training Data
 
 ```powershell
-python scripts\model_voting_pipeline\generate_model_voting_data.py `
+python scripts\football_case_study\generate_model_voting_data.py `
   --real-windows data\real_football_windows.npz `
   --n-per-model 1000 `
   --T 5.0 `
@@ -296,7 +308,7 @@ python scripts\tools\plot_model_voting_dataset.py `
 ### Step 3: Train The Neural Ratio Classifier
 
 ```powershell
-python scripts\model_voting_pipeline\train_model_voting_ratio.py `
+python scripts\football_case_study\train_model_voting_ratio.py `
   --data-dir data\model_voting_dataset `
   --epochs 100 `
   --batch-size 128 `
@@ -317,7 +329,7 @@ future prediction.
 ### Step 4: Validate Model Selection On Fresh Synthetic Tracks
 
 ```powershell
-python scripts\model_voting_pipeline\evaluate_synthetic_model_recovery.py `
+python scripts\method_validation\evaluate_synthetic_model_recovery.py `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --dataset data\model_voting_dataset\dataset.npz `
   --n-cases 80 `
@@ -332,7 +344,7 @@ synthetic model selection but does not prove real-data calibration.
 ### Step 5: Recover Model And Parameter Posteriors For The Real Prefix
 
 ```powershell
-python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
+python scripts\football_case_study\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --window-index 0 `
@@ -362,7 +374,7 @@ outputs/model_voting_posterior/posterior_chains.npz
 ### Step 6: Evaluate The Held-Out Three-Second Future
 
 ```powershell
-python scripts\model_voting_pipeline\evaluate_model_voting.py `
+python scripts\football_case_study\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
@@ -589,15 +601,19 @@ change points.
 
 | Module | Status | Used by |
 |---|---|---|
-| `src/data/football_tracking.py` | Active | Extraction and visualization tools |
-| `src/data/trajectory_features.py` | Active | Diagnostics and segmentation |
-| `src/data/segmentation.py` | Active | Extraction, generation, posterior recovery |
-| `src/data/model_voting_dataset.py` | Active | Ratio-classifier training |
-| `src/models/encoder.py` | Active shared | Model-voting classifier and archived demos |
-| `src/models/model_voting_ratio.py` | Active | Training, recovery, synthetic evaluation |
-| `src/sde/model_voting.py` | Active | Generation, recovery, future simulation |
-| `src/sde/football_ou.py` | Active shared | OU candidate plus archived OU baseline |
-| `src/utils/football_viz.py` | Active | Evaluation and visualization tools |
+| `src/football/tracking.py` | Active | Extraction and visualization tools |
+| `src/football/features.py` | Active | Diagnostics and segmentation |
+| `src/football/segmentation.py` | Active | Extraction, generation, posterior recovery |
+| `src/football/visualization.py` | Active | Football plots and clips |
+| `src/synthetic/dataset.py` | Active | Ratio-classifier training |
+| `src/sbi/encoder.py` | Active shared | Model-voting classifier and archived demos |
+| `src/sbi/ratio_model.py` | Active | Training, recovery, synthetic evaluation |
+| `src/sbi/scoring.py` | Active shared | Checkpoint loading and candidate scoring |
+| `src/sbi/evidence.py` | Active shared | Prior-integrated model evidence |
+| `src/sbi/mcmc.py` | Active shared | Per-model parameter inference |
+| `src/sbi/artifacts.py` | Active shared | Dataset, checkpoint, and run contracts |
+| `src/simulators/model_voting.py` | Active | Generation, recovery, future simulation |
+| `src/simulators/ou.py` | Active shared | OU candidate plus archived OU baseline |
 
 Legacy source status:
 
@@ -609,39 +625,39 @@ Legacy source status:
 
 Nothing under `src/legacy` is required for the current model-voting run.
 
-### `src/data/football_tracking.py`
+### `src/football/tracking.py`
 
 Owns CSV parsing, coordinate conversion, entity lookup, fixed-window
 extraction, single-window extraction, and start-time/frame selection.
 
-### `src/data/trajectory_features.py`
+### `src/football/features.py`
 
 Computes smoothed positions, finite-difference velocity, speed, acceleration,
 heading, turn angle, and trajectory diagnostics.
 
-### `src/data/segmentation.py`
+### `src/football/segmentation.py`
 
 Detects change points from turn-angle and speed changes, enforces minimum
 segment lengths, and provides an evenly spaced fallback.
 
-### `src/data/model_voting_dataset.py`
+### `src/synthetic/dataset.py`
 
 Loads the synthetic NPZ file, normalizes trajectories, converts arrays to
 PyTorch tensors, and provides `track`, `params`, `param_mask`, `model_id`, and
 `condition` for each training row.
 
-### `src/sde/model_voting.py`
+### `src/simulators/model_voting.py`
 
 Defines candidate names, parameter names, prior bounds, parameter padding and
 normalization, and Brownian/constant/piecewise simulation. It dispatches OU
-simulation to `src/sde/football_ou.py`.
+simulation to `src/simulators/ou.py`.
 
-### `src/models/encoder.py`
+### `src/sbi/encoder.py`
 
 `TrajectoryEncoder` converts a `(batch, 2, steps)` trajectory into a fixed-size
 feature vector using one-dimensional convolutions and pooling.
 
-### `src/models/model_voting_ratio.py`
+### `src/sbi/ratio_model.py`
 
 `ModelVotingRatioClassifier` combines:
 
@@ -653,7 +669,7 @@ trajectory encoder
 -> binary classifier logit
 ```
 
-### `src/utils/football_viz.py`
+### `src/football/visualization.py`
 
 Contains reusable pitch drawing, player drawing, and static tracking-frame
 visualization functions.

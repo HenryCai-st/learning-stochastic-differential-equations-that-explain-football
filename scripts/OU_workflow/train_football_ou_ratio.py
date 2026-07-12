@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader, random_split
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.legacy.ou.football_dataset import FootballOUDataset
-from src.models.encoder import TrajectoryEncoder
+from src.sbi.encoder import TrajectoryEncoder
 
 
 class ConditionedRatioClassifier(nn.Module):

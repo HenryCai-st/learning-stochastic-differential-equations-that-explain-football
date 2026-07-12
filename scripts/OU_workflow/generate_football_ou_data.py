@@ -3,7 +3,7 @@ Generate synthetic tracks for the single-model football OU baseline.
 
 Inputs:
     - optional real football windows to bootstrap start/end conditions
-    - OU parameter priors from src/sde/football_ou.py
+    - OU parameter priors from src/simulators/ou.py
 
 Outputs:
     - data/football_ou_dataset/dataset.npz with OU tracks, parameters, y0, and
@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.sde.football_ou import (
+from src.simulators.ou import (
     PARAMETER_HIGH,
     PARAMETER_LOW,
     PARAMETER_NAMES,

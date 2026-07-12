@@ -2,27 +2,26 @@
 
 Run every command from the repository root.
 
-## Required Model-Voting Pipeline
+## Controlled Method Validation
 
-These scripts form the active end-to-end workflow and should normally be run
-in this order:
+| Script | Purpose |
+|---|---|
+| `method_validation/evaluate_synthetic_model_recovery.py` | Evaluate fresh synthetic model selection with prior-integrated evidence. |
+
+Independent synthetic condition generation, known-theta recovery, and
+synthetic forecast calibration are the next Part I additions.
+
+## Football Case Study
 
 | Order | Script | Required output |
 |---:|---|---|
-| 1 | `model_voting_pipeline/extract_football_windows.py` | `data/real_football_windows.npz` |
-| 2 | `model_voting_pipeline/generate_model_voting_data.py` | `data/model_voting_dataset/dataset.npz` |
-| 3 | `model_voting_pipeline/train_model_voting_ratio.py` | `checkpoints/model_voting_ratio_best.pt` |
-| 4 | `model_voting_pipeline/evaluate_synthetic_model_recovery.py` | Synthetic model-recovery metrics |
-| 5 | `model_voting_pipeline/recover_model_voting_posterior.py` | MCMC chains and approximate model weights |
-| 6 | `model_voting_pipeline/evaluate_model_voting.py` | Future-path figures and forecast metrics |
-
-Step 4 validates the learned model-selection rule and should be completed
-before interpreting real-data model weights.
+| 1 | `football_case_study/extract_football_windows.py` | `data/real_football_windows.npz` |
+| 2 | `football_case_study/generate_model_voting_data.py` | `data/model_voting_dataset/dataset.npz` |
+| 3 | `football_case_study/train_model_voting_ratio.py` | `checkpoints/model_voting_ratio_best.pt` |
+| 4 | `football_case_study/recover_model_voting_posterior.py` | MCMC chains and approximate model weights |
+| 5 | `football_case_study/evaluate_model_voting.py` | Future-path figures and forecast metrics |
 
 ## Complementary Tools
-
-These scripts improve understanding and visualization but do not train the
-classifier or recover the posterior:
 
 | Script | Purpose |
 |---|---|
@@ -36,5 +35,3 @@ classifier or recover the posterior:
 
 - `OU_workflow/`: archived standalone OU baseline;
 - `Lorenz_workflow/`: archived Lorenz demonstration.
-
-Historical workflows are not part of the active football-ball model-voting run.

@@ -30,8 +30,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.OU_workflow.train_football_ou_ratio import ConditionedRatioClassifier
 from src.legacy.ou.football_dataset import OUParameterNormalizer, RealFootballWindows
-from src.models.encoder import TrajectoryEncoder
-from src.sde.football_ou import PARAMETER_HIGH, PARAMETER_LOW, sample_ou_parameters, simulate_position_ou_batch
+from src.sbi.encoder import TrajectoryEncoder
+from src.simulators.ou import PARAMETER_HIGH, PARAMETER_LOW, sample_ou_parameters, simulate_position_ou_batch
 
 
 PARAMETER_NAMES = ("k", "noise_scale")
@@ -379,7 +379,8 @@ def main() -> None:
     model, ckpt = load_model(Path(args.checkpoint), device)
     if not Path(args.real_windows).exists():
         raise FileNotFoundError(
-            f"Real windows not found: {args.real_windows}. Run scripts/model_voting_pipeline/extract_football_windows.py first."
+            f"Real windows not found: {args.real_windows}. "
+            "Run scripts/football_case_study/extract_football_windows.py first."
         )
     real = RealFootballWindows(
         args.real_windows,

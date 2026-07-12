@@ -31,7 +31,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH, simulate_position_ou_batch
+from src.simulators.ou import PITCH_LENGTH, PITCH_WIDTH, simulate_position_ou_batch
 
 
 MODEL_NAMES = ("brownian", "constant_velocity", "ou_target", "piecewise_velocity")

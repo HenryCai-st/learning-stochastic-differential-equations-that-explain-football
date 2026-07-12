@@ -31,14 +31,10 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.model_voting_pipeline.recover_model_voting_posterior import (
-    load_checkpoint,
-    logmeanexp,
-    normalize_track,
-    score_params,
-    softmax,
-)
-from src.sde.model_voting import (
+from src.sbi.artifacts import validate_checkpoint_contract, write_run_metadata
+from src.sbi.evidence import logmeanexp, softmax
+from src.sbi.scoring import load_checkpoint, normalize_track, score_params
+from src.simulators.model_voting import (
     MODEL_NAMES,
     pitch_normalize_condition,
     sample_model_parameters,
@@ -88,6 +84,7 @@ def main() -> None:
     dataset = np.load(args.dataset, allow_pickle=True)
     steps = int(dataset["steps"])
     dt = float(dataset["dt"])
+    validate_checkpoint_contract(checkpoint, steps=steps, dt=dt)
 
     true_ids = np.arange(args.n_cases, dtype=np.int64) % len(MODEL_NAMES)
     rng.shuffle(true_ids)
@@ -161,6 +158,15 @@ def main() -> None:
         model_names=np.asarray(MODEL_NAMES),
     )
     plot_confusion_matrix(confusion, out_dir / "confusion_matrix.png")
+    write_run_metadata(
+        out_dir / "run_metadata.json",
+        stage="synthetic_model_recovery",
+        args=args,
+        inputs={"checkpoint": args.checkpoint, "dataset": args.dataset},
+        outputs={"summary": out_dir / "summary.json", "cases": out_dir / "cases.npz"},
+        contract={"steps": steps, "dt": dt},
+        results=summary,
+    )
     print(json.dumps(summary, indent=2))
     print(f"Saved fresh synthetic model-recovery outputs to {out_dir}")
 
