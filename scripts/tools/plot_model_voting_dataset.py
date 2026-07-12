@@ -26,7 +26,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH
 from src.sde.model_voting import MODEL_NAMES, MODEL_PARAMETER_NAMES

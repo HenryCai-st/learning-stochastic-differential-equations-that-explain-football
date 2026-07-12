@@ -29,7 +29,7 @@ from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.data.football_tracking import PITCH_LENGTH, PITCH_WIDTH, denormalize, find_start_index, load_tracking
 from src.utils.football_viz import BALL_COLOUR, TEAM_COLOURS, TRAJ_COLOUR, pitch_background

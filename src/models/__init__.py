@@ -1,16 +1,7 @@
-"""Neural-network models for Lorenz SDE parameter inference."""
-from src.models.lorenz_models import (
-    TrajectoryEncoder1D,
-    LorenzRegimeClassifier,
-    LorenzParameterRegressor,
-    LorenzRatioEstimator,
-    ContrastiveRatioNet,
-)
+"""Active neural-network modules for football-ball model-voting SBI.
 
-__all__ = [
-    "TrajectoryEncoder1D",
-    "LorenzRegimeClassifier",
-    "LorenzParameterRegressor",
-    "LorenzRatioEstimator",
-    "ContrastiveRatioNet",
-]
+Import concrete classes from ``encoder`` or ``model_voting_ratio``. Historical
+Lorenz models live under ``src.legacy.lorenz``.
+"""
+
+__all__ = []

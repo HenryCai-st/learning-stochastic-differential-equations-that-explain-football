@@ -1,7 +1,8 @@
 """
-src/inference/mcmc.py
+src/legacy/inference/mcmc.py
 =====================
-Random-Walk Metropolis-Hastings (RWMH) posterior sampler.
+Historical Random-Walk Metropolis-Hastings prototype. This module is retained
+for reference only and is not imported by the active model-voting pipeline.
 
 The sampler is decoupled from the model/data: it takes a generic
 ``log_target_fn`` callable so it can be reused with any likelihood surrogate.
@@ -21,12 +22,6 @@ log_prior(theta_raw, prior_bounds)
 from __future__ import annotations
 
 import numpy as np
-
-from src.utils.features import (
-    transform_params,
-    pair_design_matrix,
-    standardize,
-)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,6 +66,14 @@ def make_log_target(
 
     The RWMH sampler then explores  p(θ | x_obs)  ∝  exp(log_target(θ)).
     """
+    try:
+        from src.utils.features import pair_design_matrix, standardize, transform_params
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "This legacy inference prototype requires the removed "
+            "src.utils.features module and is retained for reference only."
+        ) from exc
+
     obs_feat_1d = obs_traj_feat.astype(np.float64).reshape(1, -1)
 
     def log_target(theta_raw: np.ndarray) -> float:

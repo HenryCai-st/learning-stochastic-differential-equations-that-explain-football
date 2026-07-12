@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.data.segmentation import detect_change_points, fixed_even_change_points
 from src.models.model_voting_ratio import ModelVotingRatioClassifier
@@ -62,17 +62,6 @@ def checkpoint_array(ckpt: dict, key: str) -> np.ndarray:
     return np.asarray(value)
 
 
-def extrapolated_target_from_prefix(prefix: np.ndarray, suffix_steps: int, dt: float) -> np.ndarray:
-    """Use the last observed prefix velocity as a no-leak future target proxy."""
-    if len(prefix) < 2:
-        return prefix[-1].astype(np.float32)
-    velocity = (prefix[-1] - prefix[-2]) / dt
-    target = prefix[-1] + velocity * dt * max(suffix_steps, 1)
-    target[0] = np.clip(target[0], 0.0, 105.0)
-    target[1] = np.clip(target[1], 0.0, 68.0)
-    return target.astype(np.float32)
-
-
 def load_observed_window(path: Path, window_index: int, dt: float, max_segments: int, min_segment_len: int):
     """Load one real window and build prefix-only inference condition metadata."""
     if not path.exists():
@@ -86,7 +75,11 @@ def load_observed_window(path: Path, window_index: int, dt: float, max_segments:
         y0 = track[0].astype(np.float32)
         target = track[-1].astype(np.float32)
         prediction_y0 = track[-1].astype(np.float32)
-        prediction_target = extrapolated_target_from_prefix(track, len(suffix), real_dt)
+        # Keep the OU condition consistent between inference and prediction.
+        # The last observed position is the no-leak equilibrium for an OU
+        # stop/settle hypothesis; moving futures are represented by the
+        # velocity-based candidate models instead.
+        prediction_target = target.copy()
         protocol = "prefix_suffix"
     else:
         track = full_track
@@ -244,6 +237,13 @@ def softmax(values: np.ndarray) -> np.ndarray:
     return exp_values / np.sum(exp_values)
 
 
+def logmeanexp(values: np.ndarray) -> float:
+    """Stable log of the arithmetic mean of exp(values)."""
+    values = np.asarray(values, dtype=np.float64)
+    maximum = float(np.max(values))
+    return maximum + float(np.log(np.mean(np.exp(values - maximum))))
+
+
 def main() -> None:
     """Run per-model MCMC chains and save posterior samples/vote weights."""
     parser = argparse.ArgumentParser(description="Recover p(model, theta | observed track) with model-voting MCMC.")
@@ -251,6 +251,12 @@ def main() -> None:
     parser.add_argument("--checkpoint", default="checkpoints/model_voting_ratio_best.pt")
     parser.add_argument("--window-index", type=int, default=0)
     parser.add_argument("--n-init-candidates", type=int, default=2048)
+    parser.add_argument(
+        "--n-evidence-samples",
+        type=int,
+        default=4096,
+        help="Prior samples used to estimate each model's marginal evidence ratio.",
+    )
     parser.add_argument("--mcmc-steps", type=int, default=3000)
     parser.add_argument("--burn-in", type=int, default=800)
     parser.add_argument("--dt", type=float, default=0.04)
@@ -300,9 +306,11 @@ def main() -> None:
         "prediction_y0": prediction_y0.tolist(),
         "prediction_target": prediction_target.tolist(),
         "change_points": change_points.tolist(),
+        "model_weight_method": "equal model priors with prior Monte Carlo integration of exp(classifier log-ratio)",
+        "model_weight_status": "approximate; synthetic recovery and multi-window calibration are still required",
         "models": {},
     }
-    evidence_scores = []
+    log_evidence_ratios = []
     save_payload: dict[str, np.ndarray] = {
         "observed": track,
         "full_observed": full_track,
@@ -314,27 +322,40 @@ def main() -> None:
         "change_points": change_points,
         "condition": condition,
         "protocol": np.asarray(protocol),
+        "model_weight_method": np.asarray("prior_mc_ratio_evidence_equal_model_priors"),
+        "model_weight_status": np.asarray("approximate_uncalibrated"),
         "dt": np.asarray(dt, dtype=np.float32),
     }
 
     for model_name in MODEL_NAMES:
-        candidates = sample_model_parameters(model_name, args.n_init_candidates, rng)
-        logits = score_params(model, track_t, condition_t, model_name, candidates, device)
-        best_idx = int(np.argmax(logits))
+        # If the classifier estimates log p(x | model, theta) / p(x), then
+        # averaging exp(log-ratio) over theta ~ p(theta | model) estimates
+        # p(x | model) / p(x). This prior integral is comparable across models;
+        # a posterior-chain mean log density is not.
+        n_prior = max(args.n_init_candidates, args.n_evidence_samples)
+        prior_candidates = sample_model_parameters(model_name, n_prior, rng)
+        prior_logits = score_params(model, track_t, condition_t, model_name, prior_candidates, device)
+        evidence_logits = prior_logits[:args.n_evidence_samples]
+        log_evidence_ratio = logmeanexp(evidence_logits)
+        log_evidence_ratios.append(log_evidence_ratio)
+
+        init_logits = prior_logits[:args.n_init_candidates]
+        best_idx = int(np.argmax(init_logits))
         result = run_model_mcmc(
             model=model,
             track_t=track_t,
             condition_t=condition_t,
             model_name=model_name,
-            initial_theta=candidates[best_idx],
+            initial_theta=prior_candidates[best_idx],
             n_steps=args.mcmc_steps,
             burn_in=args.burn_in,
             rng=rng,
             device=device,
         )
-        evidence_scores.append(float(result["mean_logp"]))
         summary["models"][model_name] = {
-            "init_best_logit": float(logits[best_idx]),
+            "init_best_logit": float(init_logits[best_idx]),
+            "log_evidence_ratio_prior_mc": float(log_evidence_ratio),
+            "n_evidence_samples": int(args.n_evidence_samples),
             "acceptance_rate": float(result["acceptance_rate"]),
             "mean_logp": float(result["mean_logp"]),
             "max_logp": float(result["max_logp"]),
@@ -345,12 +366,15 @@ def main() -> None:
         save_payload[f"{model_name}_logp"] = np.asarray(result["logp"], dtype=np.float32)
         save_payload[f"{model_name}_samples"] = np.asarray(result["samples"], dtype=np.float32)
 
-    vote_weights = softmax(np.asarray(evidence_scores, dtype=np.float64))
+    # Equal model-family priors are used. With non-uniform model priors, add
+    # log p(model) to each log evidence ratio before this normalization.
+    vote_weights = softmax(np.asarray(log_evidence_ratios, dtype=np.float64))
     summary["model_vote_weights"] = {
         model_name: float(weight)
         for model_name, weight in zip(MODEL_NAMES, vote_weights)
     }
     save_payload["model_vote_weights"] = vote_weights.astype(np.float32)
+    save_payload["log_evidence_ratios"] = np.asarray(log_evidence_ratios, dtype=np.float32)
     save_payload["model_names"] = np.asarray(MODEL_NAMES)
 
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

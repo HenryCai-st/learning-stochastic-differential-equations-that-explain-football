@@ -2,8 +2,11 @@
 
 ## 1. Final Project Direction
 
-The final project should not rely on one fixed motion model such as OU. The
-observed football-ball trajectories are often piecewise and event-driven:
+The agreed final scope is the movement and probabilistic prediction of the
+**football ball only**. Player trajectories, player roles, teammates, and
+opponents are not part of this implementation. The project should not rely on
+one fixed motion model such as OU. Observed ball trajectories are often
+piecewise and event-driven:
 
 ```text
 straight segment -> sharp turn -> straight segment -> stop/deflection
@@ -35,7 +38,7 @@ posterior predictive distribution
 Current implemented run order:
 
 ```powershell
-python scripts\extract_football_windows.py `
+python scripts\model_voting_pipeline\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -47,37 +50,45 @@ python scripts\extract_football_windows.py `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
-python scripts\generate_model_voting_data.py `
+python scripts\model_voting_pipeline\generate_model_voting_data.py `
   --real-windows data\real_football_windows.npz `
   --n-per-model 1000 `
   --T 5.0 `
   --dt 0.04 `
   --out-dir data\model_voting_dataset
 
-python scripts\plot_model_voting_dataset.py `
+python scripts\tools\plot_model_voting_dataset.py `
   --dataset data\model_voting_dataset\dataset.npz `
   --out-dir outputs\model_voting_dataset_viz
 
-python scripts\train_model_voting_ratio.py `
+python scripts\model_voting_pipeline\train_model_voting_ratio.py `
   --data-dir data\model_voting_dataset `
   --epochs 100 `
   --batch-size 128 `
   --out-dir checkpoints
 
-python scripts\recover_model_voting_posterior.py `
+python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --window-index 0 `
   --mcmc-steps 3000 `
   --burn-in 800 `
+  --n-evidence-samples 4096 `
   --out-dir outputs\model_voting_posterior
 
-python scripts\evaluate_model_voting.py `
+python scripts\model_voting_pipeline\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
 
-python scripts\football_model_voting_clip.py `
+python scripts\model_voting_pipeline\evaluate_synthetic_model_recovery.py `
+  --checkpoint checkpoints\model_voting_ratio_best.pt `
+  --dataset data\model_voting_dataset\dataset.npz `
+  --n-cases 80 `
+  --n-evidence-samples 512 `
+  --out-dir outputs\synthetic_model_recovery
+
+python scripts\tools\football_model_voting_clip.py `
   --game data\Sample_Game_1 `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --period 1 `
@@ -106,7 +117,7 @@ evaluation.
 Optional segment diagnostic plot:
 
 ```powershell
-python scripts\plot_real_window_segments.py `
+python scripts\tools\plot_real_window_segments.py `
   --real-windows data\real_football_windows.npz `
   --window-index 0 `
   --out outputs\real_window_segments.png
@@ -115,7 +126,7 @@ python scripts\plot_real_window_segments.py `
 Optional real-data visual inspection:
 
 ```powershell
-python scripts\football_window_clip.py `
+python scripts\tools\football_window_clip.py `
   --game data\Sample_Game_1 `
   --period 1 `
   --start-time 37.2 `
@@ -235,13 +246,13 @@ Tasks:
 Current OU generator:
 
 ```text
-scripts/generate_football_ou_data.py
+scripts/OU_workflow/generate_football_ou_data.py
 ```
 
 New model-voting generator should create a mixed dataset:
 
 ```text
-scripts/generate_model_voting_data.py
+scripts/model_voting_pipeline/generate_model_voting_data.py
 ```
 
 Dataset keys:
@@ -271,8 +282,8 @@ Implemented files:
 
 ```text
 src/sde/model_voting.py
-scripts/generate_model_voting_data.py
-scripts/plot_model_voting_dataset.py
+scripts/model_voting_pipeline/generate_model_voting_data.py
+scripts/tools/plot_model_voting_dataset.py
 ```
 
 ## 6. Contrastive Ratio Classifier
@@ -314,7 +325,7 @@ Implemented files:
 ```text
 src/data/model_voting_dataset.py
 src/models/model_voting_ratio.py
-scripts/train_model_voting_ratio.py
+scripts/model_voting_pipeline/train_model_voting_ratio.py
 ```
 
 ## 7. MCMC Posterior Inference
@@ -329,20 +340,20 @@ Practical implementation:
 
 ```text
 for each model:
-    run MCMC over theta for that model
-    collect posterior samples
-    compute model score / evidence proxy
-normalize model scores into model votes
+    sample theta from its prior
+    estimate marginal evidence ratio with log-mean-exp of classifier logits
+    run MCMC over theta for the parameter posterior
+normalize evidence ratios into model probabilities using equal model priors
 ```
 
 Tasks:
 
-- [x] Add `scripts/recover_model_voting_posterior.py`.
+- [x] Add `scripts/model_voting_pipeline/recover_model_voting_posterior.py`.
 - [x] Implement model-specific priors.
 - [x] Implement random-walk Metropolis-Hastings per model.
 - [x] Store chains per model.
 - [x] Compute acceptance rate per model.
-- [x] Compute model vote weights.
+- [x] Compute model vote weights using prior Monte Carlo evidence integration.
 - [x] Save posterior samples and model scores.
 
 Implemented output:
@@ -374,13 +385,14 @@ Render:
 
 Tasks:
 
-- [x] Add `scripts/evaluate_model_voting.py`.
+- [x] Add `scripts/model_voting_pipeline/evaluate_model_voting.py`.
 - [x] Plot observed prefix and true future suffix separately.
 - [x] Plot sampled future paths.
 - [x] Plot future endpoint density.
 - [x] Plot model posterior/vote bar chart.
 - [x] Plot parameter histograms for the winning model.
-- [x] Report coverage metrics if a future suffix is held out.
+- [x] Report single-window radial predictive-region coverage if a suffix is held out.
+- [ ] Aggregate coverage over many independent windows to assess calibration.
 
 Implemented output:
 
@@ -419,10 +431,10 @@ Tasks:
 The recommended implementation is integrated into:
 
 ```text
-scripts/extract_football_windows.py
-scripts/generate_model_voting_data.py
-scripts/recover_model_voting_posterior.py
-scripts/evaluate_model_voting.py
+scripts/model_voting_pipeline/extract_football_windows.py
+scripts/model_voting_pipeline/generate_model_voting_data.py
+scripts/model_voting_pipeline/recover_model_voting_posterior.py
+scripts/model_voting_pipeline/evaluate_model_voting.py
 ```
 
 The earlier standalone baseline remains available for comparison:
@@ -481,7 +493,39 @@ ratio classifier, and evaluate on an independent held-out dataset. The old
 22.69 m result does not measure the new integrated workflow.
 ```
 
-## 10. Presentation Story
+- [x] Keep the OU target condition consistent between inference and prediction.
+- [x] Do not reuse historical change-point timestamps as future events.
+- [ ] Learn or sample future change-point times instead of assuming no future turn.
+
+Current conservative future assumptions:
+
+```text
+OU target               = last observed ball position
+constant velocity       = continue inferred velocity
+piecewise velocity      = continue latest inferred segment
+future direction change = none within the short forecast horizon
+```
+
+## 10. Validation Required Before Final Claims
+
+The end-to-end demo is implemented, but a scientifically defensible result
+requires tests on data where the generating truth is known and tests across
+more than one real window.
+
+Tasks:
+
+- [x] Generate fresh synthetic test cases not copied from classifier training rows.
+- [x] Report a true-model versus selected-model confusion matrix.
+- [x] Report top-1 model recovery accuracy and mean model log score.
+- [ ] Run MCMC on synthetic examples with known theta.
+- [ ] Report parameter bias, interval width, and 50/80/90% posterior coverage.
+- [ ] Extract evaluation windows from both Sample_Game_1 and Sample_Game_2.
+- [ ] Report aggregate ADE, FDE, and predictive-region coverage.
+- [ ] Compare against stationary, last-velocity, and empirical-noise baselines.
+- [ ] Repeat evidence estimation with multiple random seeds to measure Monte
+      Carlo variability.
+
+## 11. Optional Demonstration Checklist
 
 Use the current OU failure as motivation:
 
@@ -494,20 +538,19 @@ parameters.
 The final output is a distribution over future positions, not one track.
 ```
 
-Minimum final demo:
+Current model-voting demonstration:
 
 - [x] Show raw observed ball window.
-- [x] Show OU failure.
 - [x] Show detected piecewise segments.
-- [x] Show model vote distribution.
-- [x] Show winning model parameter posterior.
-- [x] Show posterior predictive future-density plot.
+- [ ] Regenerate model vote distribution with corrected prior-integrated evidence.
+- [ ] Regenerate winning-model parameter posterior with corrected inference.
+- [ ] Regenerate posterior predictive future density with corrected forecasting assumptions.
 
 Presentation artifact commands:
 
 ```powershell
 # Raw observed ball movement clip.
-python scripts\football_window_clip.py `
+python scripts\tools\football_window_clip.py `
   --game data\Sample_Game_1 `
   --period 1 `
   --start-time 37.2 `
@@ -516,22 +559,15 @@ python scripts\football_window_clip.py `
   --out outputs\football_window_clip.gif
 
 # Detected piecewise segment figure.
-python scripts\plot_real_window_segments.py `
+python scripts\tools\plot_real_window_segments.py `
   --real-windows data\real_football_windows.npz `
   --window-index 0 `
   --out outputs\real_window_segments.png
 
-# OU failure figure from the older single-model workflow.
-python scripts\score_real_football_window.py `
-  --real-windows data\real_football_windows.npz `
-  --checkpoint checkpoints\football_ou_ratio_best.pt `
-  --window-index 0 `
-  --out-dir outputs\football_ou_real
-
 # Model-voting posterior figures:
 # model_vote_weights.png, winning_model_parameter_histograms.png,
 # endpoint_density.png, posterior_predictive_paths.png.
-python scripts\evaluate_model_voting.py `
+python scripts\model_voting_pipeline\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
