@@ -437,60 +437,19 @@ scripts/model_voting_pipeline/recover_model_voting_posterior.py
 scripts/model_voting_pipeline/evaluate_model_voting.py
 ```
 
-The earlier standalone baseline remains available for comparison:
+Integrated data contract:
 
 ```text
-scripts/extract_prefix_suffix_windows.py
-scripts/recover_model_voting_prefix_posterior.py
-scripts/evaluate_prefix_suffix_prediction.py
-```
-
-Implemented data contract:
-
-```text
-data/real_football_prefix_suffix_windows.npz
+data/real_football_windows.npz
 
 prefix_tracks          # first 2 seconds
 suffix_tracks          # held-out next 3 seconds
-full_tracks
-y0
-prefix_end
-suffix_end
-target_for_evaluation
+tracks                 # complete window
+y0                     # complete-window initial position
+target                 # complete-window final position, evaluation only
 dt
 prefix_steps
 suffix_steps
-```
-
-Historical baseline note:
-
-```text
-The current trained ratio model expects a target-like condition. For strict
-future prediction, the real suffix endpoint must not be used. The prefix
-posterior script therefore supports prefix-only target heuristics:
-
-average
-recent
-prefix_end
-```
-
-Historical result from the full-window-trained checkpoint:
-
-```text
-The protocol runs end-to-end, but the window-0 baseline is not yet a strong
-future predictor:
-
-suffix endpoint median error: 22.69 m
-path RMSE median: 14.94 m
-coverage rate: 0.04
-```
-
-Next validation target:
-
-```text
-Regenerate the synthetic dataset from prefix-enabled real windows, retrain the
-ratio classifier, and evaluate on an independent held-out dataset. The old
-22.69 m result does not measure the new integrated workflow.
 ```
 
 - [x] Keep the OU target condition consistent between inference and prediction.

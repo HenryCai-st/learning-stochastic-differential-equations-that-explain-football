@@ -151,35 +151,9 @@ The raw clip above only shows tracking data. The model-voting clip in the run
 order uses the trained ratio classifier and adds a live gauge showing which SDE
 candidate currently best matches the recent ball trajectory.
 
-The recommended workflow now stores the observed prefix and held-out suffix
-directly in `real_football_windows.npz`. The earlier standalone baseline is
-still available for comparison:
-
-```powershell
-python scripts\extract_prefix_suffix_windows.py `
-  --input data\real_football_windows.npz `
-  --prefix-seconds 2.0 `
-  --out data\real_football_prefix_suffix_windows.npz
-
-python scripts\recover_model_voting_prefix_posterior.py `
-  --windows data\real_football_prefix_suffix_windows.npz `
-  --checkpoint checkpoints\model_voting_ratio_best.pt `
-  --window-index 0 `
-  --target-strategy prefix_end `
-  --mcmc-steps 3000 `
-  --burn-in 800 `
-  --out-dir outputs\prefix_suffix_posterior
-
-python scripts\evaluate_prefix_suffix_prediction.py `
-  --posterior outputs\prefix_suffix_posterior\posterior_chains.npz `
-  --n-paths 300 `
-  --out-dir outputs\prefix_suffix_prediction
-```
-
-The standalone baseline used a full-window-trained checkpoint and was not a
-strong future predictor. The integrated prefix-compatible workflow requires a
-freshly generated dataset and retrained checkpoint before its predictive
-quality can be assessed.
+The active workflow stores the observed prefix and held-out suffix directly in
+`real_football_windows.npz`; posterior recovery and evaluation consume that
+single data contract.
 
 ## Statistical interpretation
 
