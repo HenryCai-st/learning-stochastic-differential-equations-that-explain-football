@@ -36,6 +36,7 @@ main Part I limitation.
 | `tools/football_tracking_viz.py` | Render one raw tracking frame. |
 | `tools/football_window_clip.py` | Create a raw tracking-window animation. |
 | `tools/football_model_voting_clip.py` | Create a sliding classifier-score animation. |
+| `tools/synthetic_forecast_validation_animation.py` | Compare four conditional model forecasts against one synchronized held-out trajectory. |
 
 ## Historical Workflows
 

@@ -97,10 +97,14 @@ python scripts\method_validation\evaluate_synthetic_forecasts.py `
   --cases-per-model 25 `
   --n-evidence-samples 1024 `
   --n-paths 256
+
+python scripts\tools\synthetic_forecast_validation_animation.py
 ```
 
 Model recovery, parameter diagnostics, and controlled forecast results are
-reported in `METHOD_VALIDATION_RESULTS.md`.
+reported in `METHOD_VALIDATION_RESULTS.md`. The animation shows one observed
+prefix followed by synchronized conditional predictions from all four models;
+the highest-probability model and held-out truth are emphasized.
 
 Football case-study run order:
 

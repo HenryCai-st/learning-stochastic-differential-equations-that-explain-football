@@ -382,10 +382,16 @@ python scripts\method_validation\evaluate_synthetic_forecasts.py `
   --cases-per-model 25 `
   --n-evidence-samples 1024 `
   --n-paths 256
+
+python scripts\tools\synthetic_forecast_validation_animation.py
 ```
 
 This evaluates aggregate ADE, FDE, energy score, radial coverage, and three
-simple baselines. See `METHOD_VALIDATION_RESULTS.md` for the formal result.
+simple baselines. The optional animation uses one full-pitch trajectory and
+draws all four model-conditional forecasts against the held-out truth at the
+same rate. It selects a dynamic, interior, correctly classified case with high
+confidence and low error unless `--case-row` is supplied. See
+`METHOD_VALIDATION_RESULTS.md` for the formal result.
 
 ### Step 7: Recover Model And Parameter Posteriors For The Real Prefix
 

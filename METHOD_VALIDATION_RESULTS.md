@@ -98,6 +98,20 @@ Predictive time-point coverage for nominal 50/80/90% radial regions was
 uncertainty regions are reasonably calibrated under this controlled policy,
 but their mean error does not beat the strongest simple baseline overall.
 
+## Visual Validation
+
+`synthetic_forecast_validation_animation.py` provides a deliberately simple
+single-pitch walkthrough. It reveals one observed prefix, pauses for inference,
+and then draws four model-conditional posterior means and the held-out truth
+synchronously. The selected model uses the thickest solid line and truth uses
+a thick dashed line; faint paths show within-model uncertainty.
+
+The default display case is an interior constant-velocity trajectory with a
+24.1 m future displacement. Constant velocity receives 99.99% model weight and
+achieves 0.55 m ADE, so its prediction visibly follows the held-out trajectory
+while Brownian, OU-target, and piecewise alternatives remain distinguishable.
+The GIF uses 250 ms frames, pauses after the prefix, and holds the final result.
+
 ## Reproducible Artifacts
 
 Generated data and large results are intentionally Git-ignored:
@@ -113,6 +127,7 @@ outputs/method_validation/model_recovery_seed_*/summary.json
 data/method_validation/forecast_test.npz
 outputs/method_validation/parameter_recovery/{summary.json,case_parameter_metrics.csv,posterior_samples.npz}
 outputs/method_validation/forecast_evaluation/{summary.json,case_metrics.csv,posterior_predictive_samples.npz}
+outputs/method_validation/forecast_evaluation/{validation_walkthrough.gif,validation_walkthrough_final.png}
 ```
 
 Each stage writes metadata with arguments, seeds, Git state, runtime versions,
