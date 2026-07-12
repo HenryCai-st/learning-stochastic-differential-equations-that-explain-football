@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from src.sbi.ratio_model import ModelVotingRatioClassifier
-from src.sbi.scoring import score_params
+from src.sbi.scoring import score_aligned_params, score_params
 from src.simulators.model_voting import MODEL_SPECS
 
 
@@ -25,6 +25,21 @@ def log_prior(model_name: str, theta: np.ndarray) -> float:
                 return -np.inf
             logp -= float(np.log(value))
     return logp
+
+
+def log_prior_batch(model_name: str, theta: np.ndarray) -> np.ndarray:
+    """Vectorized model prior for arrays ending in the parameter dimension."""
+    spec = MODEL_SPECS[model_name]
+    values = np.asarray(theta, dtype=np.float64)
+    if values.shape[-1] != spec.param_dim:
+        raise ValueError(f"Expected {spec.param_dim} parameters for {model_name}.")
+    valid = np.all((values >= spec.low) & (values <= spec.high), axis=-1)
+    output = np.zeros(values.shape[:-1], dtype=np.float64)
+    for dim, is_log in enumerate(spec.log_scale):
+        if is_log:
+            valid &= values[..., dim] > 0.0
+            output -= np.log(np.clip(values[..., dim], 1e-30, None))
+    return np.where(valid, output, -np.inf)
 
 
 def proposal_scale_for_model(model_name: str) -> np.ndarray:
@@ -92,4 +107,58 @@ def run_model_mcmc(
         "acceptance_rate": accepted / max(1, n_steps),
         "mean_logp": float(sample_logp.mean()),
         "max_logp": float(sample_logp.max()),
+    }
+
+
+def run_batched_model_mcmc(
+    model: ModelVotingRatioClassifier,
+    tracks_t: torch.Tensor,
+    conditions_t: torch.Tensor,
+    model_name: str,
+    initial_theta: np.ndarray,
+    n_steps: int,
+    burn_in: int,
+    rng: np.random.Generator,
+    device: torch.device,
+) -> dict[str, np.ndarray]:
+    """Run multiple cases and chains together while preserving MH transitions."""
+    initial = np.asarray(initial_theta, dtype=np.float64)
+    if initial.ndim != 3:
+        raise ValueError("initial_theta must have shape (cases, chains, parameters).")
+    if burn_in < 0 or burn_in >= n_steps:
+        raise ValueError("burn_in must satisfy 0 <= burn_in < n_steps.")
+    n_cases, n_chains, n_params = initial.shape
+    repeated_tracks = tracks_t.repeat_interleave(n_chains, dim=0)
+    repeated_conditions = conditions_t.repeat_interleave(n_chains, dim=0)
+    proposal_scale = proposal_scale_for_model(model_name)
+
+    def score(theta: np.ndarray) -> np.ndarray:
+        flat = theta.reshape(n_cases * n_chains, n_params)
+        logits = score_aligned_params(
+            model,
+            repeated_tracks,
+            repeated_conditions,
+            model_name,
+            flat.astype(np.float32),
+            device,
+        ).reshape(n_cases, n_chains)
+        return log_prior_batch(model_name, theta) + logits
+
+    current = initial.copy()
+    current_logp = score(current)
+    chain = np.empty((n_cases, n_chains, n_steps, n_params), dtype=np.float32)
+    accepted = np.zeros((n_cases, n_chains), dtype=np.int64)
+    for step in range(n_steps):
+        proposal = current + rng.normal(size=current.shape) * proposal_scale
+        proposal_logp = score(proposal)
+        accept = np.log(rng.uniform(size=(n_cases, n_chains))) < proposal_logp - current_logp
+        current = np.where(accept[..., None], proposal, current)
+        current_logp = np.where(accept, proposal_logp, current_logp)
+        accepted += accept
+        chain[:, :, step] = current.astype(np.float32)
+
+    return {
+        "chain": chain,
+        "samples": chain[:, :, burn_in:],
+        "acceptance_rate": accepted.astype(np.float32) / max(n_steps, 1),
     }

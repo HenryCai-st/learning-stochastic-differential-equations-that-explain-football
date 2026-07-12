@@ -8,11 +8,7 @@ import numpy as np
 import torch
 
 from src.sbi.ratio_model import ModelVotingRatioClassifier
-from src.simulators.model_voting import (
-    MODEL_TO_ID,
-    normalize_padded_parameters,
-    pad_parameters,
-)
+from src.simulators.model_voting import MODEL_TO_ID, normalize_padded_parameters, pad_parameters
 
 
 def load_checkpoint(path: Path, device: torch.device) -> tuple[ModelVotingRatioClassifier, dict]:
@@ -67,6 +63,37 @@ def score_params(
             torch.from_numpy(mask[start:end]).to(device),
             torch.full((n,), model_id, dtype=torch.long, device=device),
             condition_t.repeat(n, 1),
+        )
+        outputs.append(logits.cpu().numpy())
+    return np.concatenate(outputs)
+
+
+@torch.no_grad()
+def score_aligned_params(
+    model: ModelVotingRatioClassifier,
+    tracks_t: torch.Tensor,
+    conditions_t: torch.Tensor,
+    model_name: str,
+    params: np.ndarray,
+    device: torch.device,
+    batch_size: int = 2048,
+) -> np.ndarray:
+    """Score row-aligned tracks, conditions, and candidate parameters."""
+    if len(tracks_t) != len(params) or len(conditions_t) != len(params):
+        raise ValueError("tracks, conditions, and params must have the same row count.")
+    padded, mask = pad_parameters(model_name, np.asarray(params, dtype=np.float32))
+    params_norm = normalize_padded_parameters(model_name, padded)
+    model_id = MODEL_TO_ID[model_name]
+    outputs: list[np.ndarray] = []
+    for start in range(0, len(params), batch_size):
+        end = min(start + batch_size, len(params))
+        n = end - start
+        logits = model(
+            tracks_t[start:end].to(device),
+            torch.from_numpy(params_norm[start:end]).to(device),
+            torch.from_numpy(mask[start:end]).to(device),
+            torch.full((n,), model_id, dtype=torch.long, device=device),
+            conditions_t[start:end].to(device),
         )
         outputs.append(logits.cpu().numpy())
     return np.concatenate(outputs)

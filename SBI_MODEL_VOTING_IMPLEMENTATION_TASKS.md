@@ -81,12 +81,37 @@ python scripts\football_case_study\evaluate_model_voting.py `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
 
+python scripts\method_validation\generate_synthetic_benchmark.py `
+  --out-dir data\method_validation `
+  --n-train-per-model 1000 `
+  --n-validation-per-model 100 `
+  --n-test-per-model 100
+
+python scripts\method_validation\train_ratio_estimator.py `
+  --train-data data\method_validation\train.npz `
+  --validation-data data\method_validation\validation.npz `
+  --epochs 100 `
+  --out-dir checkpoints\method_validation
+
 python scripts\method_validation\evaluate_synthetic_model_recovery.py `
-  --checkpoint checkpoints\model_voting_ratio_best.pt `
-  --dataset data\model_voting_dataset\dataset.npz `
-  --n-cases 80 `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --test-data data\method_validation\test.npz `
   --n-evidence-samples 512 `
-  --out-dir outputs\synthetic_model_recovery
+  --out-dir outputs\method_validation\model_recovery
+
+python scripts\method_validation\evaluate_synthetic_parameter_recovery.py `
+  --cases-per-model 25 `
+  --chains 4 `
+  --mcmc-steps 2400 `
+  --burn-in 800
+
+python scripts\method_validation\generate_synthetic_forecast_benchmark.py `
+  --future-T 1.0
+
+python scripts\method_validation\evaluate_synthetic_forecasts.py `
+  --cases-per-model 25 `
+  --n-evidence-samples 1024 `
+  --n-paths 256
 
 python scripts\tools\football_model_voting_clip.py `
   --game data\Sample_Game_1 `
@@ -166,9 +191,9 @@ study. Detailed ownership and the forward roadmap live in
 - [x] Write per-stage run metadata and reject checkpoint/data protocol
       mismatches.
 
-This migration preserves the existing numerical behavior. A fully
-football-independent synthetic condition generator is the next method
-validation feature, not part of this structural change.
+The football-independent condition generator, independent split artifacts,
+explicit validation training, and held-out model recovery are now implemented.
+See `METHOD_VALIDATION_RESULTS.md` for the formal 400-case result.
 
 ## 2. Candidate Models For Model Voting
 
@@ -496,14 +521,16 @@ more than one real window.
 Tasks:
 
 - [x] Generate fresh synthetic test cases not copied from classifier training rows.
+- [x] Generate football-independent train, validation, and test conditions.
+- [x] Select the checkpoint using an explicit independent validation artifact.
 - [x] Report a true-model versus selected-model confusion matrix.
 - [x] Report top-1 model recovery accuracy and mean model log score.
-- [ ] Run MCMC on synthetic examples with known theta.
-- [ ] Report parameter bias, interval width, and 50/80/90% posterior coverage.
+- [x] Run MCMC on synthetic examples with known theta.
+- [x] Report parameter bias, interval width, and 50/80/90% posterior coverage.
 - [ ] Extract evaluation windows from both Sample_Game_1 and Sample_Game_2.
-- [ ] Report aggregate ADE, FDE, and predictive-region coverage.
-- [ ] Compare against stationary, last-velocity, and empirical-noise baselines.
-- [ ] Repeat evidence estimation with multiple random seeds to measure Monte
+- [x] Report aggregate ADE, FDE, and predictive-region coverage on controlled data.
+- [x] Compare against stationary, last-velocity, and damped-velocity baselines.
+- [x] Repeat evidence estimation with multiple random seeds to measure Monte
       Carlo variability.
 
 ## 11. Optional Demonstration Checklist

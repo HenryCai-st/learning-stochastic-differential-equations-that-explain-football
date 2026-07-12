@@ -87,6 +87,20 @@ independent synthetic train/validation/test conditions
 -> calibration and simple-baseline comparison
 ```
 
+Completed controlled stages:
+
+- football-independent condition generation;
+- independent 4,000/400/400 train, validation, and test artifacts;
+- explicit train/validation ratio-estimator training;
+- complete 400-case held-out model-recovery evaluation;
+- three-seed evidence-integration stability check;
+- 100-case known-model multi-chain parameter recovery;
+- 100-case prefix/suffix forecasting with three baselines and calibration.
+
+The formal results are in `METHOD_VALIDATION_RESULTS.md`. Model recovery is
+strong, but high-dimensional chain convergence is not established and the
+forecast does not beat last velocity on aggregate error.
+
 Required outputs:
 
 - true-model versus selected-model confusion matrix;
@@ -120,14 +134,13 @@ Required analysis:
 
 ## Next Implementation Order
 
-1. Fix posterior-path/model-ID alignment in forecast outputs.
-2. Enforce period, frame, and time continuity during football window extraction.
-3. Record missing-data diagnostics before interpolation.
-4. Add a football-independent condition generator for Part I.
-5. Split conditions into independent train, validation, and test artifacts.
-6. Add known-theta posterior recovery and convergence summaries.
-7. Add synthetic forecast baselines and aggregate calibration.
-8. Run the football case study only after the controlled benchmark is fixed.
+1. Improve piecewise parameter identifiability or reduce its parameterization.
+2. Repeat parameter recovery after the piecewise change and require acceptable R-hat/ESS.
+3. Retrain with multiple seeds and quantify training sensitivity.
+4. Re-run forecast comparison and require improvement over last velocity.
+5. Enforce period, frame, and time continuity during football window extraction.
+6. Record missing-data diagnostics before interpolation.
+7. Run the football case study with controlled limitations stated explicitly.
 
 Automated test coverage is not a project milestone. Small contract and smoke
 checks are useful, but scientific validation and artifact consistency have

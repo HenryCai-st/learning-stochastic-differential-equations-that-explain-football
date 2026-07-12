@@ -172,9 +172,14 @@ Required model-voting pipeline:
 | 1 | `football_case_study/extract_football_windows.py` | Create real prefix/suffix windows. |
 | 2 | `football_case_study/generate_model_voting_data.py` | Simulate labelled football-adapted training data. |
 | 3 | `football_case_study/train_model_voting_ratio.py` | Train the ratio classifier. |
-| 4 | `method_validation/evaluate_synthetic_model_recovery.py` | Validate model selection on fresh simulations. |
-| 5 | `football_case_study/recover_model_voting_posterior.py` | Run evidence estimation and MCMC on a real prefix. |
-| 6 | `football_case_study/evaluate_model_voting.py` | Evaluate future paths, errors, and coverage. |
+| 4 | `method_validation/generate_synthetic_benchmark.py` | Create independent controlled splits. |
+| 5 | `method_validation/train_ratio_estimator.py` | Train with an explicit validation split. |
+| 6 | `method_validation/evaluate_synthetic_model_recovery.py` | Evaluate held-out model recovery. |
+| 7 | `method_validation/evaluate_synthetic_parameter_recovery.py` | Validate known-model parameter posteriors. |
+| 8 | `method_validation/generate_synthetic_forecast_benchmark.py` | Create held-out controlled futures. |
+| 9 | `method_validation/evaluate_synthetic_forecasts.py` | Evaluate forecasts and baselines. |
+| 10 | `football_case_study/recover_model_voting_posterior.py` | Run evidence estimation and MCMC on a real prefix. |
+| 11 | `football_case_study/evaluate_model_voting.py` | Evaluate future paths, errors, and coverage. |
 
 Complementary tools, not required for training or MCMC:
 
@@ -326,22 +331,63 @@ Validation accuracy answers whether matched and mismatched tuples can be
 separated. It does not by itself prove correct model selection or calibrated
 future prediction.
 
-### Step 4: Validate Model Selection On Fresh Synthetic Tracks
+### Step 4: Validate Model Selection On Independent Synthetic Splits
 
 ```powershell
+python scripts\method_validation\generate_synthetic_benchmark.py `
+  --out-dir data\method_validation `
+  --n-train-per-model 1000 `
+  --n-validation-per-model 100 `
+  --n-test-per-model 100
+
+python scripts\method_validation\train_ratio_estimator.py `
+  --train-data data\method_validation\train.npz `
+  --validation-data data\method_validation\validation.npz `
+  --epochs 100 `
+  --out-dir checkpoints\method_validation
+
 python scripts\method_validation\evaluate_synthetic_model_recovery.py `
-  --checkpoint checkpoints\model_voting_ratio_best.pt `
-  --dataset data\model_voting_dataset\dataset.npz `
-  --n-cases 80 `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --test-data data\method_validation\test.npz `
   --n-evidence-samples 512 `
-  --out-dir outputs\synthetic_model_recovery
+  --out-dir outputs\method_validation\model_recovery
 ```
 
-This creates new trajectories with known model labels and reports a confusion
-matrix. The current 80-case run achieved 87.5% top-1 recovery. This supports
-synthetic model selection but does not prove real-data calibration.
+This protocol uses football-independent split seeds and evaluates all 400
+held-out trajectories. The formal run achieved 89.75% top-1 recovery, mean
+true-model weight 0.8595, and mean model log score -0.2816. It supports
+controlled model selection but does not prove parameter coverage, forecast
+calibration, or real-data validity. See `METHOD_VALIDATION_RESULTS.md`.
 
-### Step 5: Recover Model And Parameter Posteriors For The Real Prefix
+### Step 5: Validate Known-Model Parameters
+
+```powershell
+python scripts\method_validation\evaluate_synthetic_parameter_recovery.py `
+  --cases-per-model 25 `
+  --chains 4 `
+  --mcmc-steps 2400 `
+  --burn-in 800
+```
+
+This reports bias, interval coverage, ESS, and split R-hat. The current run
+does not establish convergence for the high-dimensional piecewise model.
+
+### Step 6: Validate Controlled Forecasts
+
+```powershell
+python scripts\method_validation\generate_synthetic_forecast_benchmark.py `
+  --future-T 1.0
+
+python scripts\method_validation\evaluate_synthetic_forecasts.py `
+  --cases-per-model 25 `
+  --n-evidence-samples 1024 `
+  --n-paths 256
+```
+
+This evaluates aggregate ADE, FDE, energy score, radial coverage, and three
+simple baselines. See `METHOD_VALIDATION_RESULTS.md` for the formal result.
+
+### Step 7: Recover Model And Parameter Posteriors For The Real Prefix
 
 ```powershell
 python scripts\football_case_study\recover_model_voting_posterior.py `
@@ -371,7 +417,7 @@ outputs/model_voting_posterior/summary.json
 outputs/model_voting_posterior/posterior_chains.npz
 ```
 
-### Step 6: Evaluate The Held-Out Three-Second Future
+### Step 8: Evaluate The Held-Out Three-Second Future
 
 ```powershell
 python scripts\football_case_study\evaluate_model_voting.py `
@@ -402,7 +448,7 @@ The summary contains:
 Coverage from one suffix is only a diagnostic. Calibration requires many
 independent windows.
 
-### Step 7: Optional Animation
+### Step 9: Optional Animation
 
 Raw tracking clip:
 
@@ -500,13 +546,8 @@ Purpose: train the neural classifier used as the likelihood-ratio surrogate.
 
 Functions:
 
-- `roll_negative()`: mismatches model/theta values while preserving the track
-  condition;
-- `batch_loss_and_metrics()`: computes positive/negative logits, binary
-  cross-entropy, accuracy, and the log-ratio gap;
-- `run_epoch()`: performs one training or validation pass;
-- `validation_metrics_by_model()`: reports accuracy and score gap separately
-  for each true model family;
+- shared functions in `src/sbi/training.py` construct negative pairs, compute
+  contrastive loss, run epochs, and report per-model validation metrics;
 - `main()`: creates data loaders, trains, logs CSV history, and saves the best
   checkpoint.
 
@@ -524,13 +565,14 @@ Negative example:
 
 ### `evaluate_synthetic_model_recovery.py`
 
-Purpose: test model-family selection on fresh simulated tracks.
+Purpose: test model-family selection on the independent test artifact.
 
 Functions:
 
 - `plot_confusion_matrix()`: renders true model versus selected model;
-- `main()`: simulates fresh cases, estimates prior-integrated evidence for all
-  candidate models, and reports recovery accuracy and model log score.
+- `select_balanced_indices()`: optionally chooses an equal subset per model;
+- `main()`: loads held-out tracks, estimates prior-integrated evidence for all
+  candidates, and reports recovery accuracy and model log score.
 
 This test is stronger than classifier validation accuracy because it evaluates
 the actual model-voting decision rule.

@@ -30,7 +30,14 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.simulators.ou import PITCH_LENGTH, PITCH_WIDTH
-from src.simulators.model_voting import MAX_SEGMENTS, MODEL_NAMES, MODEL_PARAMETER_NAMES, MODEL_SPECS, simulate_model_batch
+from src.simulators.model_voting import (
+    MAX_PARAM_DIM,
+    MAX_SEGMENTS,
+    MODEL_NAMES,
+    MODEL_PARAMETER_NAMES,
+    MODEL_SPECS,
+    simulate_model_batch,
+)
 from src.football.visualization import pitch_background
 from src.sbi.artifacts import write_run_metadata
 
@@ -65,7 +72,7 @@ def sample_posterior_paths(
     steps: int,
     dt: float,
     seed: int,
-) -> tuple[np.ndarray, np.ndarray, list[str]]:
+) -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray]:
     """Sample model/theta pairs from the posterior and simulate future paths."""
     rng = np.random.default_rng(seed)
     y0 = posterior.get("prediction_y0", posterior["y0"]).astype(np.float32)
@@ -76,8 +83,9 @@ def sample_posterior_paths(
     weights = weights / weights.sum()
 
     sampled_model_ids = rng.choice(len(MODEL_NAMES), size=n_paths, p=weights)
-    all_paths = []
-    all_model_names = []
+    aligned_paths = np.empty((n_paths, steps, 2), dtype=np.float32)
+    aligned_parameters = np.zeros((n_paths, MAX_PARAM_DIM), dtype=np.float32)
+    aligned_model_names = [MODEL_NAMES[int(model_id)] for model_id in sampled_model_ids]
 
     for mid, model_name in enumerate(MODEL_NAMES):
         rows = np.where(sampled_model_ids == mid)[0]
@@ -108,13 +116,14 @@ def sample_posterior_paths(
             dt=dt,
             rng=rng,
         )
-        all_paths.append(paths)
-        all_model_names.extend([model_name] * len(rows))
+        aligned_paths[rows] = paths
+        aligned_parameters[rows, :theta.shape[1]] = theta
 
     return (
-        np.concatenate(all_paths, axis=0).astype(np.float32),
+        aligned_paths,
         sampled_model_ids.astype(np.int64),
-        all_model_names,
+        aligned_model_names,
+        aligned_parameters,
     )
 
 
@@ -277,7 +286,7 @@ def main() -> None:
         steps = len(future_suffix) + 1
     else:
         steps = len(observed)
-    paths, sampled_model_ids, _ = sample_posterior_paths(
+    paths, sampled_model_ids, _, sampled_parameters = sample_posterior_paths(
         posterior=posterior,
         n_paths=args.n_paths,
         steps=steps,
@@ -358,6 +367,7 @@ def main() -> None:
         paths=paths,
         future_suffix=future_suffix,
         sampled_model_ids=sampled_model_ids,
+        sampled_parameters=sampled_parameters,
         endpoint_error=endpoint_error,
         path_error=path_error,
     )

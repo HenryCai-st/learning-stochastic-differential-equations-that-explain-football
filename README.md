@@ -57,7 +57,52 @@ src/legacy       historical modules only
 
 See `src/README.md` for a file-by-file active/legacy table.
 
-Current run order:
+Controlled method-validation run order:
+
+```powershell
+python scripts\method_validation\generate_synthetic_benchmark.py `
+  --out-dir data\method_validation `
+  --n-train-per-model 1000 `
+  --n-validation-per-model 100 `
+  --n-test-per-model 100
+
+python scripts\method_validation\train_ratio_estimator.py `
+  --train-data data\method_validation\train.npz `
+  --validation-data data\method_validation\validation.npz `
+  --epochs 100 `
+  --out-dir checkpoints\method_validation
+
+python scripts\method_validation\evaluate_synthetic_model_recovery.py `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --test-data data\method_validation\test.npz `
+  --n-evidence-samples 512 `
+  --out-dir outputs\method_validation\model_recovery
+
+python scripts\method_validation\evaluate_synthetic_parameter_recovery.py `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --test-data data\method_validation\test.npz `
+  --cases-per-model 25 `
+  --chains 4 `
+  --mcmc-steps 2400 `
+  --burn-in 800
+
+python scripts\method_validation\generate_synthetic_forecast_benchmark.py `
+  --test-data data\method_validation\test.npz `
+  --future-T 1.0 `
+  --out data\method_validation\forecast_test.npz
+
+python scripts\method_validation\evaluate_synthetic_forecasts.py `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --forecast-data data\method_validation\forecast_test.npz `
+  --cases-per-model 25 `
+  --n-evidence-samples 1024 `
+  --n-paths 256
+```
+
+Model recovery, parameter diagnostics, and controlled forecast results are
+reported in `METHOD_VALIDATION_RESULTS.md`.
+
+Football case-study run order:
 
 ```powershell
 python scripts\football_case_study\extract_football_windows.py `
@@ -88,13 +133,6 @@ python scripts\football_case_study\train_model_voting_ratio.py `
   --epochs 100 `
   --batch-size 128 `
   --out-dir checkpoints
-
-python scripts\method_validation\evaluate_synthetic_model_recovery.py `
-  --checkpoint checkpoints\model_voting_ratio_best.pt `
-  --dataset data\model_voting_dataset\dataset.npz `
-  --n-cases 80 `
-  --n-evidence-samples 512 `
-  --out-dir outputs\synthetic_model_recovery
 
 python scripts\football_case_study\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
@@ -199,13 +237,15 @@ Implemented:
 - per-model random-walk Metropolis-Hastings
 - prior-integrated model evidence approximation
 - posterior predictive paths, ADE/FDE, and 50/80/90% predictive-region coverage
-- fresh synthetic model-recovery confusion matrix and model log score
+- independent football-free train/validation/test benchmark
+- 400-case model-recovery confusion matrix, 89.75% top-1 accuracy, and model log score
 
 Still required for robust conclusions:
 
-- synthetic parameter posterior coverage against known theta
+- improve piecewise parameter convergence and identifiability
+- repeat training and parameter recovery across network seeds
 - evaluation over many windows from both available Sample Games
-- aggregate calibration and comparison with simple motion baselines
+- improve aggregate forecast error beyond the last-velocity baseline
 
 ## Setup Instructions
 

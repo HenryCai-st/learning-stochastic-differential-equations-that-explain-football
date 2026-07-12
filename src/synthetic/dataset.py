@@ -10,9 +10,18 @@ from torch.utils.data import Dataset
 class ModelVotingDataset(Dataset):
     """Loads mixed-model synthetic tracks for model-voting ratio training."""
 
-    def __init__(self, data_dir: str | Path):
-        self.data_dir = Path(data_dir)
-        loaded = np.load(self.data_dir / "dataset.npz", allow_pickle=True)
+    def __init__(
+        self,
+        data_path: str | Path,
+        *,
+        track_mean: np.ndarray | None = None,
+        track_std: np.ndarray | None = None,
+    ):
+        self.data_path = Path(data_path)
+        if self.data_path.is_dir():
+            self.data_path = self.data_path / "dataset.npz"
+        self.data_dir = self.data_path.parent
+        loaded = np.load(self.data_path, allow_pickle=True)
         self.tracks = loaded["tracks"].astype(np.float32)
         self.parameters_norm = loaded["parameters_norm"].astype(np.float32)
         self.parameter_mask = loaded["parameter_mask"].astype(np.float32)
@@ -29,8 +38,12 @@ class ModelVotingDataset(Dataset):
             else None
         )
 
-        self.track_mean = self.tracks.mean(axis=(0, 1)).astype(np.float32)
-        self.track_std = self.tracks.std(axis=(0, 1)).astype(np.float32)
+        computed_mean = self.tracks.mean(axis=(0, 1)).astype(np.float32)
+        computed_std = self.tracks.std(axis=(0, 1)).astype(np.float32)
+        self.track_mean = computed_mean if track_mean is None else np.asarray(track_mean, dtype=np.float32)
+        self.track_std = computed_std if track_std is None else np.asarray(track_std, dtype=np.float32)
+        if self.track_mean.shape != (self.tracks.shape[2],) or self.track_std.shape != (self.tracks.shape[2],):
+            raise ValueError("track_mean and track_std must match the track channel dimension.")
         self.track_std = np.where(self.track_std < 1e-8, 1.0, self.track_std).astype(np.float32)
 
     def __len__(self) -> int:

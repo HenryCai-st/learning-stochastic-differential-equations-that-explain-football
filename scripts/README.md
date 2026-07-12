@@ -6,10 +6,16 @@ Run every command from the repository root.
 
 | Script | Purpose |
 |---|---|
-| `method_validation/evaluate_synthetic_model_recovery.py` | Evaluate fresh synthetic model selection with prior-integrated evidence. |
+| `method_validation/generate_synthetic_benchmark.py` | Generate independent football-free train, validation, and test splits. |
+| `method_validation/train_ratio_estimator.py` | Train with an explicit independent validation artifact. |
+| `method_validation/evaluate_synthetic_model_recovery.py` | Evaluate the held-out test split with prior-integrated evidence. |
+| `method_validation/evaluate_synthetic_parameter_recovery.py` | Run known-model multi-chain parameter recovery and diagnostics. |
+| `method_validation/generate_synthetic_forecast_benchmark.py` | Extend test prefixes with controlled held-out futures. |
+| `method_validation/evaluate_synthetic_forecasts.py` | Compare posterior predictions with three simple baselines. |
 
-Independent synthetic condition generation, known-theta recovery, and
-synthetic forecast calibration are the next Part I additions.
+The controlled pipeline through parameter recovery and forecasting is
+implemented. Current results identify piecewise parameter inference as the
+main Part I limitation.
 
 ## Football Case Study
 
