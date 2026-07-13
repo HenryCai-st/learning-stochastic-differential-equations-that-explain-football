@@ -224,7 +224,11 @@ def predictive_region_coverage(
     return result
 
 
-def plot_winning_parameter_histograms(posterior: dict[str, np.ndarray], winning_model: str, out_path: Path) -> None:
+def plot_winning_parameter_histograms(
+    posterior: dict[str, np.ndarray],
+    winning_model: str,
+    out_path: Path,
+) -> None:
     """Plot posterior parameter histograms for the highest-vote model family."""
     samples = posterior[f"{winning_model}_samples"].astype(np.float32)
     labels = MODEL_PARAMETER_NAMES[winning_model]

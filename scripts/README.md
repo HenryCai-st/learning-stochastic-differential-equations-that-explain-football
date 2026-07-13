@@ -26,7 +26,7 @@ classifier or recover the posterior:
 
 | Script | Purpose |
 |---|---|
-| `tools/plot_model_voting_dataset.py` | Inspect synthetic track and prior diversity. |
+| `tools/plot_model_voting_dataset.py` | Plot model, parameter, condition, and prior-predictive diversity. |
 | `tools/plot_real_window_segments.py` | Inspect detected change points. |
 | `tools/football_tracking_viz.py` | Render one raw tracking frame. |
 | `tools/football_window_clip.py` | Create a raw tracking-window animation. |

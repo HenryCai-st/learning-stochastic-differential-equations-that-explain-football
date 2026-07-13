@@ -285,7 +285,8 @@ python scripts\model_voting_pipeline\generate_model_voting_data.py `
 Because the real file contains `prefix_tracks`, the generator automatically
 uses 50-step synthetic tracks, matching the 2-second observed prefix.
 
-Inspect synthetic diversity before training:
+Inspect the synthetic model prior, parameter priors, condition priors, and
+prior-predictive trajectory diversity before training:
 
 ```powershell
 python scripts\tools\plot_model_voting_dataset.py `
@@ -475,9 +476,34 @@ Functions:
 - `load_dataset()`: loads the NPZ archive;
 - `choose_indices()`: limits the number of displayed tracks;
 - `plot_tracks_by_model()`: overlays tracks for each model family;
-- `plot_model_parameter_histograms()`: shows model-specific theta priors;
-- `plot_displacement_summary()`: compares speed, displacement, and path length;
+- `plot_model_prior()`: shows the empirical discrete probability of every SDE
+  family and verifies that the dataset is balanced;
+- `theoretical_prior_density()`: evaluates the configured uniform or
+  log-uniform density for comparison with sampled theta;
+- `plot_model_parameter_histograms()`: gives every theta dimension its own
+  axis, scale, bounds, and theoretical prior curve;
+- `plot_condition_priors()`: shows start-position, target-position, and
+  change-point distributions;
+- `plot_displacement_summary()`: compares prior-predictive speed,
+  displacement, and path length;
 - `main()`: writes all diagnostic figures.
+
+Generated figures:
+
+```text
+tracks_by_model.png
+model_prior.png
+parameter_priors.png
+condition_priors.png
+prior_predictive_trajectory_statistics.png
+```
+
+The condition plot also reports the number of unique start, target, and
+change-point values. The current dataset was bootstrapped from one real window,
+so these condition priors are point masses rather than diverse distributions.
+The tool prints a warning when this occurs. Parameter and stochastic trajectory
+diversity can still be present, but final training should use multiple real
+windows or the synthetic condition pool.
 
 This script should be run before training. If every model produces nearly the
 same trajectories, the classifier has no meaningful model-selection problem.

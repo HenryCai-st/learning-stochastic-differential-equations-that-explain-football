@@ -150,6 +150,8 @@ def main() -> None:
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=args.num_workers)
 
     model = ModelVotingRatioClassifier().to(device)
+
+
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     out_dir = Path(args.out_dir)

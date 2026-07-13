@@ -36,4 +36,3 @@ class ModelVotingDataset(Dataset):
             "model_id": torch.tensor(self.model_id[idx], dtype=torch.long),
             "condition": torch.from_numpy(self.conditions[idx]),
         }
-

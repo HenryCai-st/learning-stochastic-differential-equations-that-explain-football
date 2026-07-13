@@ -2,15 +2,9 @@
 
 ## Current football SBI workflow
 
-The agreed project scope is model-voting simulation-based inference for the
-football **ball trajectory only**. Player movement, player roles, teammate
-effects, and opponent effects are outside the current scope. The goal is to
-infer a distribution
-`p(model, theta | observed_track)` and then render a posterior predictive
-distribution over future ball positions.
+The project scope is model-voting simulation-based inference for the football **ball trajectory**. The goal is to infer a distribution  `p(model, theta | observed_track)` and then render a posterior predictive distribution over future ball positions. 
 
-This is a probabilistic forecasting project. It does not claim that one SDE
-produces the deterministic true future path.
+This is a probabilistic forecasting project. It does not claim that one SDE produces the deterministic true future path.
 
 Main implementation task list:
 
@@ -18,23 +12,18 @@ Main implementation task list:
 SBI_MODEL_VOTING_IMPLEMENTATION_TASKS.md
 ```
 
-For a beginner-oriented explanation of the full project, every active script,
-all important functions, result interpretation, advantages, limitations, and
-the improvement roadmap, read:
+The explanary doc of the full project, every active script, all important functions, result interpretation, advantages, limitations, and the improvement roadmap, please read:
 
 ```text
 MODEL_VOTING_PROJECT_GUIDE.md
 ```
-
-The archived single-model OU baseline is documented separately in
-`OU_BASELINE_WORKFLOW.md`.
 
 Script organization:
 
 ```text
 scripts/model_voting_pipeline/  required six-stage training/inference workflow
 scripts/tools/                  optional plots, raw-data inspection, and clips
-scripts/OU_workflow/            archived standalone OU baseline
+scripts/OU_workflow/            archived standalone OU(Ornstein-Uhlenbeck) workflow
 scripts/Lorenz_workflow/        archived Lorenz demonstration
 ```
 
@@ -128,11 +117,8 @@ python scripts\model_voting_pipeline\extract_football_windows.py `
   --out data\real_football_windows.npz
 ```
 
-With `--prefix-T 2.0`, the first 2 seconds are saved as the observed input and
-the remaining 3 seconds are saved as the future suffix for evaluation. The
-model-voting data generator automatically trains on `prefix_tracks` when they
-exist, so MCMC inference is conditioned on the 2-second prefix rather than the
-full 5-second window.
+With `--prefix-T 2.0`, the first 2 seconds are saved as the observed input and the remaining 3 seconds are saved as the future suffix for evaluation. The model-voting data generator automatically trains on `prefix_tracks` when they
+exist, so MCMC inference is conditioned on the 2-second prefix rather than the full 5-second window.
 
 To visually inspect the same kind of time window as a short clip:
 
@@ -147,29 +133,33 @@ python scripts\tools\football_window_clip.py `
   --out outputs\football_window_clip.gif
 ```
 
-The raw clip above only shows tracking data. The model-voting clip in the run
-order uses the trained ratio classifier and adds a live gauge showing which SDE
-candidate currently best matches the recent ball trajectory.
+The raw clip above only shows tracking data. The model-voting clip in the run order uses the trained ratio classifier and adds a live gauge showing which SDE candidate currently best matches the recent ball trajectory.
+
+Notes of clip rendering:
+
+* `.gif` should work if your environment has `matplotlib` and Pillow.
+* `.mp4` is supported too, but only if `ffmpeg` is installed.
 
 ## Statistical interpretation
 
-The ratio classifier is trained on matched and mismatched
-`(track, model, theta)` pairs. For each candidate model, MCMC samples theta
-conditional on the observed prefix. Model-family weights are estimated by
-integrating the learned likelihood ratio over prior theta samples:
+The ratio classifier is trained on matched and mismatched  `(track, model, theta)` pairs. For each candidate model, MCMC samples theta conditional on the observed prefix. Model-family weights are estimated by integrating the learned likelihood ratio over prior theta samples:
 
 ```text
 log evidence ratio(model)
     = log mean exp(log_ratio(track, model, theta)), theta ~ prior(theta | model)
 ```
 
-The resulting weights assume equal prior probability for all model families.
-They are approximate SBI model probabilities and must be validated on fresh
-synthetic data before being interpreted as calibrated probabilities.
+$$
+\log \text{ER}(m) = \log \mathbb{E}_{\theta \sim p(\theta \mid m)} \left[ \exp \left( \log r(t, m, \theta) \right) \right]
+$$
 
-For future prediction, OU uses the last observed position as its equilibrium.
-The piecewise model continues the latest inferred velocity segment and assumes
-no unobserved future turn. Predicting future turn times remains open work.
+The resulting weights assume equal prior probability for all model families. They are approximate SBI model probabilities and must be validated on fresh synthetic data before being interpreted as calibrated probabilities.
+
+For future prediction, 
+
+* OU uses the last observed position as its equilibrium.
+* The piecewise model continues the latest inferred velocity segment and assumes no unobserved future turn.
+* Predicting future turn times remains open work.
 
 ## Current validation status
 
@@ -196,7 +186,6 @@ Still required for robust conclusions:
    ```bash
    python -m venv venv
    ```
-
    * Windows: `venv\Scripts\activate`
    * Mac/Linux: `source venv/bin/activate`
 2. **Install Dependencies:**
@@ -210,10 +199,8 @@ Still required for robust conclusions:
    ```bash
    pip uninstall torch torchvision
    ```
-
    Then install the CUDA-enabled version:
 
    ```bash
    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
    ```
-

@@ -41,7 +41,11 @@ from scripts.tools.football_window_clip import (
     select_indices,
     tracking_paths,
 )
-from scripts.model_voting_pipeline.recover_model_voting_posterior import checkpoint_array, load_checkpoint, score_params
+from scripts.model_voting_pipeline.recover_model_voting_posterior import (
+    checkpoint_array,
+    load_checkpoint,
+    score_params,
+)
 from src.data.football_tracking import PITCH_LENGTH, PITCH_WIDTH, load_tracking
 from src.data.segmentation import detect_change_points, fixed_even_change_points
 from src.sde.model_voting import MODEL_NAMES, pitch_normalize_condition, sample_model_parameters

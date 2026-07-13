@@ -62,4 +62,3 @@ class ModelVotingRatioClassifier(nn.Module):
         z_condition = self.condition_encoder(condition)
         features = torch.cat([z_track, z_model, z_theta, z_condition], dim=1)
         return self.classifier(features).squeeze(-1)
-
