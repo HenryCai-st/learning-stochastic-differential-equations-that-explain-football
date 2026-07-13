@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from src.data.football_tracking import PITCH_LENGTH, PITCH_WIDTH, denormalize
+from src.football.tracking import PITCH_LENGTH, PITCH_WIDTH, denormalize
 
 
 TEAM_COLOURS = {
@@ -173,4 +173,3 @@ def visualize_tracking_frame(
     else:
         plt.show()
     plt.close()
-

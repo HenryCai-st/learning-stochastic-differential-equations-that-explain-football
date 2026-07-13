@@ -21,8 +21,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.data.football_tracking import load_tracking
-from src.utils.football_viz import visualize_tracking_frame
+from src.football.tracking import load_tracking
+from src.football.visualization import visualize_tracking_frame
 
 
 def main() -> None:

@@ -27,8 +27,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.data.segmentation import detect_change_points, fixed_even_change_points
-from src.sde.model_voting import (
+from src.football.segmentation import detect_change_points, fixed_even_change_points
+from src.simulators.model_voting import (
     MAX_PARAM_DIM,
     MODEL_NAMES,
     MODEL_TO_ID,
@@ -38,6 +38,7 @@ from src.sde.model_voting import (
     sample_model_parameters,
     simulate_model_batch,
 )
+from src.sbi.artifacts import data_artifact_metadata, write_run_metadata
 
 
 def load_real_condition_pool(path: str | Path, dt: float, max_segments: int, min_segment_len: int):
@@ -171,6 +172,23 @@ def main() -> None:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    contract = {
+        "n_tracks": int(args.n_per_model * len(MODEL_NAMES)),
+        "steps": int(args.steps),
+        "track_channels": 2,
+        "dt": float(args.dt),
+        "T": float(args.T),
+        "seed": int(args.seed),
+        "model_names": list(MODEL_NAMES),
+        "max_param_dim": int(MAX_PARAM_DIM),
+        "condition_sources": condition_sources,
+    }
+    artifact_metadata = data_artifact_metadata(
+        artifact_type="model_voting_synthetic_dataset",
+        args=args,
+        contract=contract,
+        inputs={"real_windows": args.real_windows},
+    )
     np.savez_compressed(
         out_dir / "dataset.npz",
         tracks=np.concatenate(all_tracks).astype(np.float32),
@@ -189,6 +207,15 @@ def main() -> None:
         steps=args.steps,
         seed=args.seed,
         condition_sources=json.dumps(condition_sources),
+        artifact_metadata_json=np.asarray(json.dumps(artifact_metadata)),
+    )
+    write_run_metadata(
+        out_dir / "run_metadata.json",
+        stage="model_voting_data_generation",
+        args=args,
+        inputs={"real_windows": args.real_windows},
+        outputs={"dataset": out_dir / "dataset.npz"},
+        contract=contract,
     )
     print(json.dumps({
         "out": str(out_dir / "dataset.npz"),

@@ -45,7 +45,7 @@ parameter-track pair is physically compatible.
 Core simulator:
 
 ```text
-src/sde/football_ou.py
+src/simulators/ou.py
 ```
 
 Dataset adapter:
@@ -57,19 +57,19 @@ src/legacy/ou/football_dataset.py
 Real CSV window extractor:
 
 ```text
-scripts/model_voting_pipeline/extract_football_windows.py
+scripts/football_case_study/extract_football_windows.py
 ```
 
 Reusable tracking-data package:
 
 ```text
-src/data/football_tracking.py
+src/football/tracking.py
 ```
 
 Reusable football visualization helpers:
 
 ```text
-src/utils/football_viz.py
+src/football/visualization.py
 ```
 
 Visualization CLI wrapper:
@@ -113,7 +113,7 @@ tracks and parameter distribution histograms.
 Use the reusable tracking parser through:
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -130,7 +130,7 @@ specific window instead of scanning with `--stride`, provide either
 `--start-time` or `--start-frame`:
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -149,7 +149,7 @@ as `prefix_tracks`, while the next 3 seconds are saved as `suffix_tracks` for
 held-out prediction evaluation. To select by exact frame instead:
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -188,7 +188,7 @@ python scripts\tools\football_tracking_viz.py `
   --out outputs\football_visualisation.png
 ```
 
-The reusable parsing functions live in `src/data/football_tracking.py`, so both
+The reusable parsing functions live in `src/football/tracking.py`, so both
 the extractor and the visualizer use the same CSV interpretation.
 
 For a moving clip of one selected time window, use:
@@ -400,7 +400,7 @@ real track does not come with true `(k, noise_scale)`.
 Existing module:
 
 ```text
-src/models/encoder.py
+src/sbi/encoder.py
 ```
 
 Already supports `in_channels`, so football uses:
@@ -438,7 +438,7 @@ logit = model(track, params, condition)
 Tracking-data package role:
 
 ```text
-src/data/football_tracking.py
+src/football/tracking.py
 ```
 
 owns:
@@ -453,7 +453,7 @@ extract_fixed_windows()
 Visualization package role:
 
 ```text
-src/utils/football_viz.py
+src/football/visualization.py
 ```
 
 owns:

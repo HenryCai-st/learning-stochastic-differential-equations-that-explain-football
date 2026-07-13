@@ -30,9 +30,15 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+<<<<<<< HEAD
 from src.sde.football_ou import PITCH_LENGTH, PITCH_WIDTH
 from src.sde.model_voting import MAX_PARAM_DIM, MODEL_NAMES, MODEL_PARAMETER_NAMES, MODEL_SPECS
 from src.utils.football_viz import pitch_background
+=======
+from src.simulators.ou import PITCH_LENGTH, PITCH_WIDTH
+from src.simulators.model_voting import MODEL_NAMES, MODEL_PARAMETER_NAMES
+from src.football.visualization import pitch_background
+>>>>>>> origin/yuyang
 
 
 MODEL_COLORS = {

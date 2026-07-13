@@ -1,0 +1,1 @@
+"""Football case-study commands."""

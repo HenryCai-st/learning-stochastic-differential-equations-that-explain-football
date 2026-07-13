@@ -31,8 +31,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.data.football_tracking import PITCH_LENGTH, PITCH_WIDTH, denormalize, find_start_index, load_tracking
-from src.utils.football_viz import BALL_COLOUR, TEAM_COLOURS, TRAJ_COLOUR, pitch_background
+from src.football.tracking import PITCH_LENGTH, PITCH_WIDTH, denormalize, find_start_index, load_tracking
+from src.football.visualization import BALL_COLOUR, TEAM_COLOURS, TRAJ_COLOUR, pitch_background
 
 
 def resolve_game_dir(game: str | Path) -> Path:

@@ -41,6 +41,7 @@ from scripts.tools.football_window_clip import (
     select_indices,
     tracking_paths,
 )
+<<<<<<< HEAD
 from scripts.model_voting_pipeline.recover_model_voting_posterior import (
     checkpoint_array,
     load_checkpoint,
@@ -50,6 +51,13 @@ from src.data.football_tracking import PITCH_LENGTH, PITCH_WIDTH, load_tracking
 from src.data.segmentation import detect_change_points, fixed_even_change_points
 from src.sde.model_voting import MODEL_NAMES, pitch_normalize_condition, sample_model_parameters
 from src.utils.football_viz import BALL_COLOUR, TEAM_COLOURS, TRAJ_COLOUR, pitch_background
+=======
+from src.sbi.scoring import checkpoint_array, load_checkpoint, score_params
+from src.football.tracking import PITCH_LENGTH, PITCH_WIDTH, load_tracking
+from src.football.segmentation import detect_change_points, fixed_even_change_points
+from src.simulators.model_voting import MODEL_NAMES, pitch_normalize_condition, sample_model_parameters
+from src.football.visualization import BALL_COLOUR, TEAM_COLOURS, TRAJ_COLOUR, pitch_background
+>>>>>>> origin/yuyang
 
 
 MODEL_COLORS = {

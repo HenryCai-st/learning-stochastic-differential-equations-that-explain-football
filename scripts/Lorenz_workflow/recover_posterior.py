@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scripts.Lorenz_workflow.generate_data import PARAMETER_LOW, PARAMETER_HIGH, RHO_REGIME_BOUNDS, sample_parameters
 from scripts.Lorenz_workflow.train_ratio_classifier import RatioClassifier
 from src.legacy.lorenz.dataset import SDEDataset
-from src.models.encoder import TrajectoryEncoder
+from src.sbi.encoder import TrajectoryEncoder
 
 PARAMETER_NAMES = ["sigma", "rho", "beta", "noise_scale"]
 

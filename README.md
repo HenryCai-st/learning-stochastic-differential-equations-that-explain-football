@@ -12,7 +12,19 @@ Main implementation task list:
 SBI_MODEL_VOTING_IMPLEMENTATION_TASKS.md
 ```
 
+<<<<<<< HEAD
 The explanary doc of the full project, every active script, all important functions, result interpretation, advantages, limitations, and the improvement roadmap, please read:
+=======
+The two-part project structure and next-stage roadmap are documented in:
+
+```text
+PROJECT_RESTRUCTURE_PLAN.md
+```
+
+For a beginner-oriented explanation of the full project, every active script,
+all important functions, result interpretation, advantages, limitations, and
+the improvement roadmap, read:
+>>>>>>> origin/yuyang
 
 ```text
 MODEL_VOTING_PROJECT_GUIDE.md
@@ -21,7 +33,8 @@ MODEL_VOTING_PROJECT_GUIDE.md
 Script organization:
 
 ```text
-scripts/model_voting_pipeline/  required six-stage training/inference workflow
+scripts/method_validation/      controlled synthetic method evaluation
+scripts/football_case_study/    football extraction, inference, and forecasting
 scripts/tools/                  optional plots, raw-data inspection, and clips
 scripts/OU_workflow/            archived standalone OU(Ornstein-Uhlenbeck) workflow
 scripts/Lorenz_workflow/        archived Lorenz demonstration
@@ -30,16 +43,68 @@ scripts/Lorenz_workflow/        archived Lorenz demonstration
 Source organization:
 
 ```text
-src/data, src/models, src/sde, src/utils   active model-voting modules
-src/legacy                                historical modules only
+src/sbi          shared ratio estimation, evidence, MCMC, and metadata
+src/simulators   candidate stochastic motion models and priors
+src/synthetic    controlled synthetic data adapters
+src/football     football tracking, features, segmentation, and visualization
+src/legacy       historical modules only
 ```
 
 See `src/README.md` for a file-by-file active/legacy table.
 
-Current run order:
+Controlled method-validation run order:
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\method_validation\generate_synthetic_benchmark.py `
+  --out-dir data\method_validation `
+  --n-train-per-model 1000 `
+  --n-validation-per-model 100 `
+  --n-test-per-model 100
+
+python scripts\method_validation\train_ratio_estimator.py `
+  --train-data data\method_validation\train.npz `
+  --validation-data data\method_validation\validation.npz `
+  --epochs 100 `
+  --out-dir checkpoints\method_validation
+
+python scripts\method_validation\evaluate_synthetic_model_recovery.py `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --test-data data\method_validation\test.npz `
+  --n-evidence-samples 512 `
+  --out-dir outputs\method_validation\model_recovery
+
+python scripts\method_validation\evaluate_synthetic_parameter_recovery.py `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --test-data data\method_validation\test.npz `
+  --cases-per-model 25 `
+  --chains 4 `
+  --mcmc-steps 2400 `
+  --burn-in 800
+
+python scripts\method_validation\generate_synthetic_forecast_benchmark.py `
+  --test-data data\method_validation\test.npz `
+  --future-T 1.0 `
+  --out data\method_validation\forecast_test.npz
+
+python scripts\method_validation\evaluate_synthetic_forecasts.py `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --forecast-data data\method_validation\forecast_test.npz `
+  --cases-per-model 25 `
+  --n-evidence-samples 1024 `
+  --n-paths 256
+
+python scripts\tools\synthetic_forecast_validation_animation.py
+```
+
+Model recovery, parameter diagnostics, and controlled forecast results are
+reported in `METHOD_VALIDATION_RESULTS.md`. The animation shows one observed
+prefix followed by synchronized conditional predictions from all four models;
+the highest-probability model and held-out truth are emphasized.
+
+Football case-study run order:
+
+```powershell
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -51,7 +116,7 @@ python scripts\model_voting_pipeline\extract_football_windows.py `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
-python scripts\model_voting_pipeline\generate_model_voting_data.py `
+python scripts\football_case_study\generate_model_voting_data.py `
   --real-windows data\real_football_windows.npz `
   --n-per-model 1000 `
   --T 5.0 `
@@ -62,20 +127,13 @@ python scripts\tools\plot_model_voting_dataset.py `
   --dataset data\model_voting_dataset\dataset.npz `
   --out-dir outputs\model_voting_dataset_viz
 
-python scripts\model_voting_pipeline\train_model_voting_ratio.py `
+python scripts\football_case_study\train_model_voting_ratio.py `
   --data-dir data\model_voting_dataset `
   --epochs 100 `
   --batch-size 128 `
   --out-dir checkpoints
 
-python scripts\model_voting_pipeline\evaluate_synthetic_model_recovery.py `
-  --checkpoint checkpoints\model_voting_ratio_best.pt `
-  --dataset data\model_voting_dataset\dataset.npz `
-  --n-cases 80 `
-  --n-evidence-samples 512 `
-  --out-dir outputs\synthetic_model_recovery
-
-python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
+python scripts\football_case_study\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --window-index 0 `
@@ -84,7 +142,7 @@ python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
   --n-evidence-samples 4096 `
   --out-dir outputs\model_voting_posterior
 
-python scripts\model_voting_pipeline\evaluate_model_voting.py `
+python scripts\football_case_study\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
@@ -104,7 +162,7 @@ python scripts\tools\football_model_voting_clip.py `
 of scanning all possible windows, add either `--start-time` or `--start-frame`:
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -140,6 +198,15 @@ Notes of clip rendering:
 * `.gif` should work if your environment has `matplotlib` and Pillow.
 * `.mp4` is supported too, but only if `ffmpeg` is installed.
 
+The active workflow stores the observed prefix and held-out suffix directly in
+`real_football_windows.npz`; posterior recovery and evaluation consume that
+single data contract.
+
+Generated NPZ files, checkpoints, and result directories now include schema,
+Git commit, run arguments, simulator priors, and data-contract metadata.
+Posterior recovery and synthetic evaluation fail early when trajectory length,
+`dt`, model schema, or simulator priors do not match the checkpoint.
+
 ## Statistical interpretation
 
 The ratio classifier is trained on matched and mismatched  `(track, model, theta)` pairs. For each candidate model, MCMC samples theta conditional on the observed prefix. Model-family weights are estimated by integrating the learned likelihood ratio over prior theta samples:
@@ -170,13 +237,15 @@ Implemented:
 - per-model random-walk Metropolis-Hastings
 - prior-integrated model evidence approximation
 - posterior predictive paths, ADE/FDE, and 50/80/90% predictive-region coverage
-- fresh synthetic model-recovery confusion matrix and model log score
+- independent football-free train/validation/test benchmark
+- 400-case model-recovery confusion matrix, 89.75% top-1 accuracy, and model log score
 
 Still required for robust conclusions:
 
-- synthetic parameter posterior coverage against known theta
+- improve piecewise parameter convergence and identifiability
+- repeat training and parameter recovery across network seeds
 - evaluation over many windows from both available Sample Games
-- aggregate calibration and comparison with simple motion baselines
+- improve aggregate forecast error beyond the last-velocity baseline
 
 ## Setup Instructions
 

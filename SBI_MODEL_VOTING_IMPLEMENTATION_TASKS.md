@@ -34,7 +34,7 @@ posterior predictive distribution
 Current implemented run order:
 
 ```powershell
-python scripts\model_voting_pipeline\extract_football_windows.py `
+python scripts\football_case_study\extract_football_windows.py `
   --home data\Sample_Game_1\Sample_Game_1_RawTrackingData_Home_Team.csv `
   --away data\Sample_Game_1\Sample_Game_1_RawTrackingData_Away_Team.csv `
   --team home `
@@ -46,7 +46,7 @@ python scripts\model_voting_pipeline\extract_football_windows.py `
   --dt 0.04 `
   --out data\real_football_windows.npz
 
-python scripts\model_voting_pipeline\generate_model_voting_data.py `
+python scripts\football_case_study\generate_model_voting_data.py `
   --real-windows data\real_football_windows.npz `
   --n-per-model 1000 `
   --T 5.0 `
@@ -57,13 +57,13 @@ python scripts\tools\plot_model_voting_dataset.py `
   --dataset data\model_voting_dataset\dataset.npz `
   --out-dir outputs\model_voting_dataset_viz
 
-python scripts\model_voting_pipeline\train_model_voting_ratio.py `
+python scripts\football_case_study\train_model_voting_ratio.py `
   --data-dir data\model_voting_dataset `
   --epochs 100 `
   --batch-size 128 `
   --out-dir checkpoints
 
-python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
+python scripts\football_case_study\recover_model_voting_posterior.py `
   --real-windows data\real_football_windows.npz `
   --checkpoint checkpoints\model_voting_ratio_best.pt `
   --window-index 0 `
@@ -72,17 +72,42 @@ python scripts\model_voting_pipeline\recover_model_voting_posterior.py `
   --n-evidence-samples 4096 `
   --out-dir outputs\model_voting_posterior
 
-python scripts\model_voting_pipeline\evaluate_model_voting.py `
+python scripts\football_case_study\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation
 
-python scripts\model_voting_pipeline\evaluate_synthetic_model_recovery.py `
-  --checkpoint checkpoints\model_voting_ratio_best.pt `
-  --dataset data\model_voting_dataset\dataset.npz `
-  --n-cases 80 `
+python scripts\method_validation\generate_synthetic_benchmark.py `
+  --out-dir data\method_validation `
+  --n-train-per-model 1000 `
+  --n-validation-per-model 100 `
+  --n-test-per-model 100
+
+python scripts\method_validation\train_ratio_estimator.py `
+  --train-data data\method_validation\train.npz `
+  --validation-data data\method_validation\validation.npz `
+  --epochs 100 `
+  --out-dir checkpoints\method_validation
+
+python scripts\method_validation\evaluate_synthetic_model_recovery.py `
+  --checkpoint checkpoints\method_validation\ratio_estimator_best.pt `
+  --test-data data\method_validation\test.npz `
   --n-evidence-samples 512 `
-  --out-dir outputs\synthetic_model_recovery
+  --out-dir outputs\method_validation\model_recovery
+
+python scripts\method_validation\evaluate_synthetic_parameter_recovery.py `
+  --cases-per-model 25 `
+  --chains 4 `
+  --mcmc-steps 2400 `
+  --burn-in 800
+
+python scripts\method_validation\generate_synthetic_forecast_benchmark.py `
+  --future-T 1.0
+
+python scripts\method_validation\evaluate_synthetic_forecasts.py `
+  --cases-per-model 25 `
+  --n-evidence-samples 1024 `
+  --n-paths 256
 
 python scripts\tools\football_model_voting_clip.py `
   --game data\Sample_Game_1 `
@@ -125,6 +150,28 @@ python scripts\tools\football_window_clip.py `
 This clip tool is not part of ratio training or MCMC inference. Its role is to inspect whether the chosen observed time window contains the kind of ball motion we want the model-voting SBI demo to explain. `--trail-seconds 2.0` keeps only the most recent two seconds of ball trajectory visible as a sliding trail.
 
 The model-voting clip uses the trained ratio classifier and a sliding recent trajectory window. For each scored frame, it samples candidate parameters for each SDE family, scores them with the learned classifier, and displays a live soft vote over Brownian, constant-velocity, OU-target, and piecewise-velocity models beside the pitch.
+
+## Project Structure And Artifact Contracts
+
+The project is separated into controlled method validation and a football case
+study. Detailed ownership and the forward roadmap live in
+`PROJECT_RESTRUCTURE_PLAN.md`.
+
+- [x] Separate shared SBI code from football data adapters.
+- [x] Move candidate simulators and priors to `src/simulators/`.
+- [x] Move football tracking and preprocessing to `src/football/`.
+- [x] Move synthetic dataset adapters to `src/synthetic/`.
+- [x] Split active commands into `scripts/method_validation/` and
+      `scripts/football_case_study/`.
+- [x] Extract evidence, checkpoint scoring, and MCMC into `src/sbi/`.
+- [x] Embed schema, Git commit, arguments, priors, and data contracts in new
+      datasets and checkpoints.
+- [x] Write per-stage run metadata and reject checkpoint/data protocol
+      mismatches.
+
+The football-independent condition generator, independent split artifacts,
+explicit validation training, and held-out model recovery are now implemented.
+See `METHOD_VALIDATION_RESULTS.md` for the formal 400-case result.
 
 ## 2. Candidate Models For Model Voting
 
@@ -189,12 +236,21 @@ turn angle    angle(v_t, v_{t-1})
 
 Tasks:
 
+<<<<<<< HEAD
 - [X] Add `src/data/trajectory_features.py`.
 - [X] Implement finite-difference velocity.
 - [X] Implement speed and acceleration.
 - [X] Implement heading and turn-angle features.
 - [X] Smooth positions lightly before differencing if tracking noise is large.
 - [X] Add diagnostics for extreme jumps and missing values.
+=======
+- [x] Add `src/football/features.py`.
+- [x] Implement finite-difference velocity.
+- [x] Implement speed and acceleration.
+- [x] Implement heading and turn-angle features.
+- [x] Smooth positions lightly before differencing if tracking noise is large.
+- [x] Add diagnostics for extreme jumps and missing values.
+>>>>>>> origin/yuyang
 
 ## 4. Piecewise Segmentation
 
@@ -213,12 +269,21 @@ Simple first algorithm:
 
 Tasks:
 
+<<<<<<< HEAD
 - [X] Add `src/data/segmentation.py`.
 - [X] Implement angle-threshold segmentation.
 - [X] Implement minimum segment length.
 - [X] Implement fixed-K segmentation fallback.
 - [X] Plot observed track with detected change points.
 - [X] Save segment metadata into real-window `.npz`.
+=======
+- [x] Add `src/football/segmentation.py`.
+- [x] Implement angle-threshold segmentation.
+- [x] Implement minimum segment length.
+- [x] Implement fixed-K segmentation fallback.
+- [x] Plot observed track with detected change points.
+- [x] Save segment metadata into real-window `.npz`.
+>>>>>>> origin/yuyang
 
 ## 5. Synthetic Data Generation
 
@@ -231,7 +296,7 @@ scripts/OU_workflow/generate_football_ou_data.py
 New model-voting generator should create a mixed dataset:
 
 ```text
-scripts/model_voting_pipeline/generate_model_voting_data.py
+scripts/football_case_study/generate_model_voting_data.py
 ```
 
 Dataset keys:
@@ -260,8 +325,8 @@ Tasks:
 Implemented files:
 
 ```text
-src/sde/model_voting.py
-scripts/model_voting_pipeline/generate_model_voting_data.py
+src/simulators/model_voting.py
+scripts/football_case_study/generate_model_voting_data.py
 scripts/tools/plot_model_voting_dataset.py
 ```
 
@@ -292,19 +357,28 @@ binary classifier head
 
 Tasks:
 
+<<<<<<< HEAD
 - [X] Add `src/models/model_voting_ratio.py`.
 - [X] Support variable parameter dimensions via padding + mask.
 - [X] Add model one-hot or model embedding.
 - [X] Keep y0/target/segment conditions attached to the track.
 - [X] Train with balanced matched/mismatched pairs.
 - [X] Track validation accuracy and log-ratio gap per model.
+=======
+- [x] Add `src/sbi/ratio_model.py`.
+- [x] Support variable parameter dimensions via padding + mask.
+- [x] Add model one-hot or model embedding.
+- [x] Keep y0/target/segment conditions attached to the track.
+- [x] Train with balanced matched/mismatched pairs.
+- [x] Track validation accuracy and log-ratio gap per model.
+>>>>>>> origin/yuyang
 
 Implemented files:
 
 ```text
-src/data/model_voting_dataset.py
-src/models/model_voting_ratio.py
-scripts/model_voting_pipeline/train_model_voting_ratio.py
+src/synthetic/dataset.py
+src/sbi/ratio_model.py
+scripts/football_case_study/train_model_voting_ratio.py
 ```
 
 ## 7. MCMC Posterior Inference
@@ -327,6 +401,7 @@ normalize evidence ratios into model probabilities using equal model priors
 
 Tasks:
 
+<<<<<<< HEAD
 - [X] Add `scripts/model_voting_pipeline/recover_model_voting_posterior.py`.
 - [X] Implement model-specific priors.
 - [X] Implement random-walk Metropolis-Hastings per model.
@@ -334,6 +409,15 @@ Tasks:
 - [X] Compute acceptance rate per model.
 - [X] Compute model vote weights using prior Monte Carlo evidence integration.
 - [X] Save posterior samples and model scores.
+=======
+- [x] Add `scripts/football_case_study/recover_model_voting_posterior.py`.
+- [x] Implement model-specific priors.
+- [x] Implement random-walk Metropolis-Hastings per model.
+- [x] Store chains per model.
+- [x] Compute acceptance rate per model.
+- [x] Compute model vote weights using prior Monte Carlo evidence integration.
+- [x] Save posterior samples and model scores.
+>>>>>>> origin/yuyang
 
 Implemented output:
 
@@ -364,6 +448,7 @@ Render:
 
 Tasks:
 
+<<<<<<< HEAD
 - [X] Add `scripts/model_voting_pipeline/evaluate_model_voting.py`.
 - [X] Plot observed prefix and true future suffix separately.
 - [X] Plot sampled future paths.
@@ -371,6 +456,15 @@ Tasks:
 - [X] Plot model posterior/vote bar chart.
 - [X] Plot parameter histograms for the winning model.
 - [X] Report single-window radial predictive-region coverage if a suffix is held out.
+=======
+- [x] Add `scripts/football_case_study/evaluate_model_voting.py`.
+- [x] Plot observed prefix and true future suffix separately.
+- [x] Plot sampled future paths.
+- [x] Plot future endpoint density.
+- [x] Plot model posterior/vote bar chart.
+- [x] Plot parameter histograms for the winning model.
+- [x] Report single-window radial predictive-region coverage if a suffix is held out.
+>>>>>>> origin/yuyang
 - [ ] Aggregate coverage over many independent windows to assess calibration.
 
 Implemented output:
@@ -403,12 +497,45 @@ future target = next 3 seconds
 
 Tasks:
 
+<<<<<<< HEAD
 - [X] Update real-window extraction to store prefix/suffix split.
 - [X] Condition inference on prefix only.
 - [X] Evaluate predictive distribution against suffix.
 - [X] Do not leak endpoint unless the task is explicitly reconstruction.
 - [X] Keep the OU target condition consistent between inference and prediction.
 - [X] Do not reuse historical change-point timestamps as future events.
+=======
+- [x] Update real-window extraction to store prefix/suffix split.
+- [x] Condition inference on prefix only.
+- [x] Evaluate predictive distribution against suffix.
+- [x] Do not leak endpoint unless the task is explicitly reconstruction.
+The recommended implementation is integrated into:
+
+```text
+scripts/football_case_study/extract_football_windows.py
+scripts/football_case_study/generate_model_voting_data.py
+scripts/football_case_study/recover_model_voting_posterior.py
+scripts/football_case_study/evaluate_model_voting.py
+```
+
+Integrated data contract:
+
+```text
+data/real_football_windows.npz
+
+prefix_tracks          # first 2 seconds
+suffix_tracks          # held-out next 3 seconds
+tracks                 # complete window
+y0                     # complete-window initial position
+target                 # complete-window final position, evaluation only
+dt
+prefix_steps
+suffix_steps
+```
+
+- [x] Keep the OU target condition consistent between inference and prediction.
+- [x] Do not reuse historical change-point timestamps as future events.
+>>>>>>> origin/yuyang
 - [ ] Learn or sample future change-point times instead of assuming no future turn.
 
 Current conservative future assumptions:
@@ -428,6 +555,7 @@ more than one real window.
 
 Tasks:
 
+<<<<<<< HEAD
 - [X] Generate fresh synthetic test cases not copied from classifier training rows.
 - [X] Report a true-model versus selected-model confusion matrix.
 - [X] Report top-1 model recovery accuracy and mean model log score.
@@ -438,6 +566,20 @@ Tasks:
 - [ ] Compare against stationary, last-velocity, and empirical-noise baselines.
 - [ ] Repeat evidence estimation with multiple random seeds to measure Monte
   Carlo variability.
+=======
+- [x] Generate fresh synthetic test cases not copied from classifier training rows.
+- [x] Generate football-independent train, validation, and test conditions.
+- [x] Select the checkpoint using an explicit independent validation artifact.
+- [x] Report a true-model versus selected-model confusion matrix.
+- [x] Report top-1 model recovery accuracy and mean model log score.
+- [x] Run MCMC on synthetic examples with known theta.
+- [x] Report parameter bias, interval width, and 50/80/90% posterior coverage.
+- [ ] Extract evaluation windows from both Sample_Game_1 and Sample_Game_2.
+- [x] Report aggregate ADE, FDE, and predictive-region coverage on controlled data.
+- [x] Compare against stationary, last-velocity, and damped-velocity baselines.
+- [x] Repeat evidence estimation with multiple random seeds to measure Monte
+      Carlo variability.
+>>>>>>> origin/yuyang
 
 ## 11. Optional Demonstration Checklist
 
@@ -481,7 +623,7 @@ python scripts\tools\plot_real_window_segments.py `
 # Model-voting posterior figures:
 # model_vote_weights.png, winning_model_parameter_histograms.png,
 # endpoint_density.png, posterior_predictive_paths.png.
-python scripts\model_voting_pipeline\evaluate_model_voting.py `
+python scripts\football_case_study\evaluate_model_voting.py `
   --posterior outputs\model_voting_posterior\posterior_chains.npz `
   --n-paths 300 `
   --out-dir outputs\model_voting_evaluation

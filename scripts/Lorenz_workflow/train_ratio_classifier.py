@@ -36,7 +36,7 @@ def find_project_root(start: Path) -> Path:
 PROJECT_ROOT = find_project_root(Path(__file__).resolve())
 sys.path.insert(0, str(PROJECT_ROOT))
 from src.legacy.lorenz.dataset import SDEDataset
-from src.models.encoder import TrajectoryEncoder
+from src.sbi.encoder import TrajectoryEncoder
 
 
 class RatioClassifier(nn.Module):
@@ -245,5 +245,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

@@ -26,15 +26,16 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.data.football_tracking import (
+from src.football.tracking import (
     extract_fixed_windows,
     extract_single_window,
     entity_xy,
     find_start_index,
     load_tracking,
 )
-from src.data.segmentation import detect_change_points, fixed_even_change_points
-from src.data.trajectory_features import trajectory_diagnostics
+from src.football.segmentation import detect_change_points, fixed_even_change_points
+from src.football.features import trajectory_diagnostics
+from src.sbi.artifacts import data_artifact_metadata, write_run_metadata
 
 
 def main() -> None:
@@ -157,6 +158,23 @@ def main() -> None:
             "prefix_steps": int(prefix_steps),
             "suffix_steps": int(steps - prefix_steps),
         }
+    contract = {
+        "n_windows": int(len(tracks)),
+        "steps": int(steps),
+        "track_channels": 2,
+        "dt": float(args.dt),
+        "T": float(args.T),
+        "prefix_steps": prefix_steps,
+        "suffix_steps": None if prefix_steps is None else int(steps - prefix_steps),
+        "entity": args.entity,
+        "team": args.team,
+    }
+    artifact_metadata = data_artifact_metadata(
+        artifact_type="real_football_windows",
+        args=args,
+        contract=contract,
+        inputs={"home_tracking": args.home, "away_tracking": args.away},
+    )
     np.savez_compressed(
         out,
         tracks=tracks,
@@ -176,7 +194,16 @@ def main() -> None:
         start_time=args.start_time,
         start_frame=args.start_frame,
         period_filter=args.period,
+        artifact_metadata_json=np.asarray(json.dumps(artifact_metadata)),
         **extra_payload,
+    )
+    write_run_metadata(
+        out.with_suffix(".run.json"),
+        stage="football_window_extraction",
+        args=args,
+        inputs={"home_tracking": args.home, "away_tracking": args.away},
+        outputs={"windows": out},
+        contract=contract,
     )
     print(json.dumps({
         "out": str(out),
